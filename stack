@@ -28,8 +28,9 @@ action=$1   # deploy or compile
 echo "Processing stack in '$infile'"
 
 stack_ns=$(yq -e e '.ns' $infile 2>/dev/null) || stack_ns="${infile%.*}"
+stack_name=$(yq -e e '.name' $infile 2>/dev/null) || stack_name="${stack_ns}"
 
-echo "Working with stack '$stack_ns' from $(yq e '.files | .[] | select(.)' $infile| wc -l) files"
+echo "Working with stack '$stack_name'@'$stack_ns' from $(yq e '.files | .[] | select(.)' $infile| wc -l) files"
 for compose_file in $(yq e '.files | .[] | select(.)' $infile); do
   stack="${stack}$(cat $compose_file)\n---\n"
 done;
@@ -51,11 +52,7 @@ if [[ $action == "deploy" ]] ; then
 
   [ -f "$current_stack" ] && diff -q "$current_stack" <(echo -e "$compiled") || (echo "Change detected, please compile first" && exit 1)
 
-  docker stack deploy
-    --with-registry-auth \
-    --compose-file "$current_stack" \
-    web-monitor
-
+  docker stack deploy --with-registry-auth --compose-file "$current_stack" $stack_name
   docker service ls
 fi
 
