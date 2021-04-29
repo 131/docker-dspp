@@ -3,11 +3,11 @@
 set -e
 
 DSPP_VERSION=1.0.0
+DSPP_HASH=$(md5sum "$0" | head -c 5)
 
 abort() { trace "$1"; exit ${2:-1}; }
 usage() { abort "Usage: $0 \n\t-f [stack-file.yml] compile|deploy\n\t[-v] show version"; }
 trace() { echo -e "$1" 1>&2; }
-
 
 # parse cmdline
 while getopts "vf:" o; do
@@ -37,11 +37,12 @@ trace "Processing stack in '$infile'"
 
 stack_ns=$(yq -e e '.ns' $infile 2>/dev/null) || stack_ns="${infile%.*}"
 stack_name=$(yq -e e '.name' $infile 2>/dev/null) || stack_name="${stack_ns}"
-
-trace "Working with stack '$stack_name'@'$stack_ns' from $(yq e '.files | .[] | select(.)' $infile| wc -l) files"
+trace "Working with stack '${stack_name}@${stack_ns}' from $(yq e '.files | .[] | select(.)' $infile| wc -l) files"
 for compose_file in $(yq e '.files | .[] | select(.)' $infile); do
   stack="${stack}$(cat $compose_file)\n---\n"
 done;
+
+stack_revision=$(echo -e "$stack" | md5sum | head -c 5)
 
 current_stack=.docker-stack-${stack_ns}.yml
 
@@ -52,12 +53,15 @@ echo -e "$stack"| yq -e e '.' - >/dev/null || (
   abort "Find trace in $dump_file"
 )
 
+header="${stack_name}:${stack_ns} @${stack_revision} (dspp v${DSPP_VERSION}-${DSPP_HASH})"
+
 compiled=$(echo -e "$stack" \
   | yq -j ea 'del(.x-*)' - \
-  | yq -P eval-all '. as $item ireduce ({}; . * $item ) |
+  | yq -P eval-all '. as $item ireduce ({}; . *+ $item ) |
     sortKeys(..) |
     {"version":.version, "configs":.configs, "networks":.networks, "volumes":.volumes, "services":.services} |
-    del( .[] | select(. == null) )
+    del( .[] | select(. == null) ) |
+    . headComment="'"$header"'"
   ' - )
 
 
