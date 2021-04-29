@@ -2,19 +2,24 @@
 
 set -e
 
+DSPP_VERSION=1.0.0
+
 abort() { trace "$1"; exit ${2:-1}; }
-usage() { abort "Usage: $0 -f [stack-file.yml] compile|deploy"; }
-trace() { echo $1 1>&2; }
+usage() { abort "Usage: $0 \n\t-f [stack-file.yml] compile|deploy\n\t[-v] show version"; }
+trace() { echo -e "$1" 1>&2; }
 
 
 # parse cmdline
-while getopts ":f:" o; do
+while getopts "vf:" o; do
     case "${o}" in
         f)
           infile=${OPTARG}
             ;;
+        v)
+          abort "version $DSPP_VERSION"
+            ;;
         *)
-            usage
+          usage
             ;;
     esac
 done
@@ -22,7 +27,8 @@ done
 shift $((OPTIND-1))
 
 # validate args
-[ ! -f $infile ] && usage
+[ ! -f "$infile" ] && usage
+
 action=$1   # deploy or compile
 
 
@@ -46,13 +52,12 @@ echo -e "$stack"| yq -e e '.' - >/dev/null || (
   abort "Find trace in $dump_file"
 )
 
-
-compiled=$(echo -e "$stack" | yq -j ea '
+compiled=$(echo -e "$stack" \
+  | yq -j ea 'del(.x-*)' - \
+  | yq -P eval-all '. as $item ireduce ({}; . * $item ) |
     sortKeys(..) |
-    del(.x-*)' - |
-    yq -P eval-all '. as $item ireduce ({}; . * $item ) |
-    sortKeys(.services) | sortKeys(.config) | sortKeys(.volumes) |
-    {"version":.version, "configs":.configs, "networks":.networks, "volumes":.volumes, "services":.services}
+    {"version":.version, "configs":.configs, "networks":.networks, "volumes":.volumes, "services":.services} |
+    del( .[] | select(. == null) )
   ' - )
 
 
