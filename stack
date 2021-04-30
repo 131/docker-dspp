@@ -44,8 +44,12 @@ done;
 
 stack_revision=$(echo -e "$stack" | md5sum | head -c 5)
 
-current_stack=.docker-stack-${stack_ns}.yml
+current_stack=.docker-stack/${stack_ns}.yml
 
+
+trace "Working in $current_stack"
+
+mkdir -p .docker-stack
 
 echo -e "$stack"| yq -e e '.' - >/dev/null || (
   dump_file="${current_stack}-debug.yml"
@@ -69,7 +73,7 @@ if [[ $action == "deploy" ]] ; then
 
   [ -f "$current_stack" ] && diff -q "$current_stack" <(echo -e "$compiled") || abort "Change detected, please compile first"
 
-  docker stack deploy --with-registry-auth --compose-file "$current_stack" $stack_name
+  docker stack deploy --with-registry-auth --compose-file - $stack_name < "$current_stack"
   docker service ls
 fi
 
