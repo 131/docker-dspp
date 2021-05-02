@@ -3,12 +3,12 @@
 
 debug=0
 npm_config_loglevel="error"
-
 export npm_config_loglevel
 
 ret=0
 tar=`which tar 2>&1`
 curl=`which curl 2>&1`
+node=`which node 2>&1`
 
 
 # set the temp dir
@@ -39,7 +39,7 @@ cd "$TMP" \
   && echo "removing existing npm" \
   && "$node" bin/npm-cli.js rm npm -gf \
   && echo "installing npm@$t" \
-  && "$node" bin/npm-cli.js install -gf ../npm.tgz \
+  && "$node" bin/npm-cli.js install -gf "$TMP"/npm.tgz \
   && cd "$BACK" \
   && rm -rf "$TMP" \
   && echo "successfully installed npm@$t"
