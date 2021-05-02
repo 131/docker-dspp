@@ -37,7 +37,7 @@ cd "$TMP" \
   && $tar -xzf npm.tgz \
   && cd "$TMP"/package \
   && echo "removing existing npm" \
-  && "$node" bin/npm-cli.js rm npm -gf --loglevel=silent \
+  && "$node" bin/npm-cli.js rm npm -gf \
   && echo "installing npm@$t" \
   && "$node" bin/npm-cli.js install -gf ../npm.tgz \
   && cd "$BACK" \
