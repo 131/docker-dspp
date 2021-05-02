@@ -1,0 +1,6 @@
+{
+  "version": "1.0.0",
+  "scripts" : {
+    "version": "sed -Ei -e \"s/(DSPP_VERSION=).*/\\1${npm_package_version}/\" stack && git add -A stack"
+  }
+}

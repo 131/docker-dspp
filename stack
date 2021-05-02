@@ -56,7 +56,7 @@ echo "$stack"| yq -e e '.' - >/dev/null || (
   abort "Find trace in $dump_file"
 )
 
-header="${stack_name}:${stack_ns} @${stack_revision} (dspp v${DSPP_VERSION}-${DSPP_HASH})"
+header="${stack_name}:${stack_ns} @${stack_revision} (dspp v${DSPP_VERSION})"
 
 compiled=$(echo "$stack" \
   | yq -j ea 'del(.x-*)' - \
