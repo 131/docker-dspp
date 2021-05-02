@@ -1,6 +1,27 @@
 {
+  "name": "dspp",
   "version": "1.0.1",
+  "bin": {
+    "dspp": "./stack"
+  },
   "scripts": {
     "version": "sed -Ei -e \"s/(DSPP_VERSION=).*/\\1${npm_package_version}/\" stack && git add -A stack"
-  }
+  },
+  "description": "[dspp](https://github.com/131/dspp) is a **d**ocker **s**tack **p**re**p**rocessor",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/131/docker-dspp.git"
+  },
+  "keywords": [
+    "docker",
+    "stack",
+    "pre-processor"
+  ],
+  "author": "Francois Leurent <131.code@leurent.email>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/131/docker-dspp/issues"
+  },
+  "homepage": "https://github.com/131/docker-dspp#readme"
 }
