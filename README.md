@@ -14,7 +14,7 @@ dspp -f production.yml deploy
 ```
 
 # Install using npm
-sudo npm -g dsppp
+sudo npm -g dspp
 
 
 # requires yq > 4.6
