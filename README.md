@@ -1,4 +1,5 @@
-Docker stack helper
+Docker stack pre-processor
+
 
 
 # Usage sample

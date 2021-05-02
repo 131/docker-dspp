@@ -79,10 +79,19 @@ fi
 if [[ $action == "compile" ]] ; then
   in=$current_stack
   [ ! -f "$in" ] && in=/dev/null
-  diff -q "$in" <(echo "$compiled") && abort "No changes detected" 0  || ( diff -y <(echo -e "current stack\n---"; cat "$in")  <(echo -e "next stack\n---"; echo "$compiled") | colordiff | most)
 
-  read -p "Confirm [y/N]: " commit
-  commit=$(echo -n ${commit:-n} | tr '[:upper:]' '[:lower:]')
+  diff -q "$in" <(echo "$compiled") && abort "No changes detected" 0
+
+  style=0
+  while : ; do
+    [ $style = 1 ] && ( diff -y <(echo -e "current stack\n---"; cat "$in")  <(echo -e "next stack\n---"; echo "$compiled") | colordiff | most)
+    [ $style = 0 ] && ( echo "$compiled" | git diff --no-index "$in" - ) || true
+    read -p "Confirm [y/N/q] (q : toggle diff style): " commit
+
+    commit=$(echo -n ${commit:-n} | tr '[:upper:]' '[:lower:]')
+    [ $commit != "q" ] && break
+    (( style ^= 1 )) || true
+  done
 
   [ $commit != "y" ] && exit 1;
 
