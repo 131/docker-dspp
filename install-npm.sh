@@ -29,7 +29,7 @@ BACK="$PWD"
 t="${npm_install:-2.15.5}"
 
 
-$url = "https://registry.npmjs.org/npm/-/npm-$t.tgz"
+url="https://registry.npmjs.org/npm/-/npm-$t.tgz"
 echo "fetching: $url" >&2
 
 cd "$TMP" \
