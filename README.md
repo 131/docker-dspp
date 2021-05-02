@@ -33,7 +33,7 @@ apt-get install most colordiff
 # default is 2.15.5
 # export npm_install=7.11.2
 
-curl -L https://raw.githubusercontent.com/131/docker-dspp/master/install-npm.sh |  sh
+curl -L https://131.github.io/docker-dspp/install-npm.sh |  sh
 
 ```
 
