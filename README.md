@@ -17,8 +17,8 @@ dspp -f production.yml deploy
 sudo npm -g dspp
 
 
-# requires yq > 4.6
-export  VERSION=v4.6.0 BINARY=yq_linux_amd64
+# requires yq > 4.9
+export  VERSION=v4.9.3 BINARY=yq_linux_amd64
 sudo wget https://github.com/mikefarah/yq/releases/download/${VERSION}/${BINARY} -O /usr/bin/yq
 sudo chmod +x /usr/bin/yq
 
