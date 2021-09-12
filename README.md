@@ -6,8 +6,11 @@
 
 # Usage sample
 ```
-dspp -f production.yml compile
-dspp -f production.yml deploy
+dspp production.yml --ir://run=compile
+dspp production.yml --ir://run=deploy
+
+
+
 
 ```
 # Installation instruction
@@ -15,12 +18,6 @@ dspp -f production.yml deploy
 
 # Install using npm
 sudo npm -g dspp
-
-
-# requires yq > 4.9
-export  VERSION=v4.9.3 BINARY=yq_linux_amd64
-sudo wget https://github.com/mikefarah/yq/releases/download/${VERSION}/${BINARY} -O /usr/bin/yq
-sudo chmod +x /usr/bin/yq
 
 
 # requires most colordiff

@@ -2,13 +2,13 @@
   "name": "dspp",
   "version": "2.0.0",
   "bin": {
-    "dspp": "./stack"
+    "dspp": "./stack.js"
   },
   "scripts": {
-    "version": "sed -Ei -e \"s/(DSPP_VERSION=).*/\\1${npm_package_version}/\" stack && git add -A stack"
+    "eslint": "eslint ."
   },
   "description": "[dspp](https://github.com/131/dspp) is a **d**ocker **s**tack **p**re**p**rocessor",
-  "main": "index.js",
+  "main": "stack.js",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/131/docker-dspp.git"
@@ -23,5 +23,16 @@
   "bugs": {
     "url": "https://github.com/131/docker-dspp/issues"
   },
-  "homepage": "https://github.com/131/docker-dspp#readme"
+  "homepage": "https://github.com/131/docker-dspp#readme",
+  "dependencies": {
+    "cnyks": "^2.6.9",
+    "js-yaml": "^4.1.0",
+    "mout": "^1.0.0",
+    "nyks": "^6.2.0"
+  },
+  "devDependencies": {
+    "eslint-plugin-ivs": "^1.3.0",
+    "expect.js": "^0.3.1",
+    "mocha": "^3.1.2"
+  }
 }
