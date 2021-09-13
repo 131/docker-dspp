@@ -79,19 +79,39 @@ class dspp {
 
     // strip all filtered services
     if(filter) {
-      let valid_configs = [];
+      let f_configs = [], f_volumes = [], f_networks = [];
 
       for(let [service_name, service] of Object.entries(out.services)) {
-        if(service_name.indexOf(filter) === -1)
+        if(!service_name.includes(filter)) {
           delete out.services[service_name];
+          continue;
+        }
+
         for(let config of service.configs || [])
-          valid_configs.push(config.source);
+          f_configs.push(config.source);
+        for(let volume of service.volumes || [])
+          f_volumes.push(volume.source);
+        for(let [k, v] of Object.entries(service.networks || {}))
+          f_networks.push(typeof v == "string" ? v : k);
       }
 
+
+
       for(let config_name in out.configs) {
-        if(!valid_configs.includes(config_name))
+        if(!f_configs.includes(config_name))
           delete out.configs[config_name];
       }
+      for(let volume_name in out.volumes) {
+        if(!f_volumes.includes(volume_name))
+          delete out.volumes[volume_name];
+      }
+
+      for(let network_name in out.networks) {
+        if(!f_networks.includes(network_name))
+          delete out.networks[network_name];
+      }
+
+
     }
 
 
@@ -116,12 +136,14 @@ class dspp {
 
 
     let body = yaml.dump({
+
       version  : out.version,
-      configs  : out.configs,
-      secrets  : out.secrets,
-      networks : out.networks,
-      volumes  : out.volumes,
-      services : out.services
+      configs  : isEmpty(out.configs)  ? undefined : out.configs,
+      secrets  : isEmpty(out.secrets)  ? undefined : out.secrets,
+      networks : isEmpty(out.networks) ? undefined : out.networks,
+      volumes  : isEmpty(out.volumes)  ? undefined : out.volumes,
+      services : isEmpty(out.services) ? undefined : out.services,
+
     }, {quotingType : '"', lineWidth : -1, noCompatMode : true});
 
     let stack_revision = md5(stack + body).substr(0, 5); //source + compiled
@@ -211,6 +233,9 @@ function sortObjByKey(value) {
     value;
 }
 
+const isEmpty = function(obj) {
+  return Object.keys(obj || {}).length === 0;
+};
 
 
 
