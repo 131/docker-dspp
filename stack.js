@@ -56,15 +56,15 @@ class dspp {
 
     this.stack_name = config.name || stack_ns;
 
-    console.log(`Working with stack '%s@%s' from %d files and %d env files`, this.stack_name, stack_ns, config.files.length, config['env-files'].length);
+    console.log(`Working with stack '%s@%s' from %d files and %d env files`, this.stack_name, stack_ns, config.files.length, (config['env-files'] || []).length);
 
 
     let env = '';
-    for(let compose_file of config['env-files'])
+    for(let compose_file of config['env-files'] || [])
       env += fs.readFileSync(compose_file, 'utf-8') + `\n`;
 
     let stack = '';
-    for(let compose_file of config.files)
+    for(let compose_file of config.files || [])
       stack += env + fs.readFileSync(compose_file, 'utf-8') + `\n---\n`;
 
 
@@ -117,7 +117,7 @@ class dspp {
 
     if(process_config) {
       let config_map = {};
-      for(let [config_name, config] of Object.entries(out.configs)) {
+      for(let [config_name, config] of Object.entries(out.configs || {})) {
         if(config.external)
           continue;
 
