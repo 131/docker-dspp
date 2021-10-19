@@ -56,7 +56,7 @@ class dspp {
     }
 
 
-    console.log(`Working with stack '%s@%s' from %d files and %d env files`, this.stack_name, config.files.length, (config['env-files'] || []).length);
+    console.log(`Working with stack '%s' from %d files and %d env files`, this.stack_name, config.files.length, (config['env-files'] || []).length);
 
 
     let env = '';
