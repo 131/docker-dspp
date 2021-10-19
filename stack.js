@@ -47,16 +47,16 @@ class dspp {
     let config = fs.readFileSync(config_file, 'utf-8');
     config = yaml.load(config);
 
-    let stack_ns   = config.ns || path.basename(config_file, '.yml');
+    this.stack_name  = config.name || path.basename(config_file, '.yml');
+    this.current_stack   = `.docker-stack/${this.stack_name}.yml`;
 
     if(filter) {
-      stack_ns = `${stack_ns}.${filter}`;
       console.log("Filter stack for '%s'", filter);
+      this.current_stack   = `.docker-stack/${this.stack_name}.${filter}.yml`;
     }
 
-    this.stack_name = config.name || stack_ns;
 
-    console.log(`Working with stack '%s@%s' from %d files and %d env files`, this.stack_name, stack_ns, config.files.length, (config['env-files'] || []).length);
+    console.log(`Working with stack '%s@%s' from %d files and %d env files`, this.stack_name, config.files.length, (config['env-files'] || []).length);
 
 
     let env = '';
@@ -68,7 +68,6 @@ class dspp {
       stack += env + fs.readFileSync(compose_file, 'utf-8') + `\n---\n`;
 
 
-    this.current_stack   = `.docker-stack/${stack_ns}.yml`;
 
     console.log("Working in %s", this.current_stack);
 
@@ -147,7 +146,7 @@ class dspp {
     }, {quotingType : '"', lineWidth : -1, noCompatMode : true});
 
     let stack_revision = md5(stack + body).substr(0, 5); //source + compiled
-    let header = `# ${this.stack_name}:${stack_ns} @${stack_revision} (dspp v${DSPP_VERSION})\n`;
+    let header = `# ${this.stack_name} @${stack_revision} (dspp v${DSPP_VERSION})\n`;
     this.compiled = header + body;
   }
 
