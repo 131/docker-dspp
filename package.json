@@ -26,6 +26,7 @@
   "homepage": "https://github.com/131/docker-dspp#readme",
   "dependencies": {
     "cnyks": "^2.6.9",
+    "glob": "^7.2.0",
     "js-yaml": "^4.1.0",
     "mout": "^1.0.0",
     "nyks": "^6.2.0"

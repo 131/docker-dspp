@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 'use strict';
 
-
 const {version : DSPP_VERSION } = require('./package.json');
 
-const fs   = require('fs');
-const path = require('path');
+const fs    = require('fs');
+const glob  = require('glob').sync;
+const path  = require('path');
 const spawn = require('child_process').spawn;
 
 const deepMixIn  = require('mout/object/deepMixIn');
@@ -38,7 +38,6 @@ class dspp {
     mkdirpSync(CACHE_CAS_PATH);
   }
 
-
   async _parse() {
     let process_config = true;
 
@@ -55,9 +54,7 @@ class dspp {
       this.current_stack   = `.docker-stack/${this.stack_name}.${filter}.yml`;
     }
 
-
     console.log(`Working with stack '%s' from %d files and %d env files`, this.stack_name, config.files.length, (config['env-files'] || []).length);
-
 
     let env = '';
     for(let compose_file of config['env-files'] || [])
@@ -67,18 +64,17 @@ class dspp {
     for(let compose_file of config.files || [])
       stack += env + fs.readFileSync(compose_file, 'utf-8') + `\n---\n`;
 
-
-
     console.log("Working in %s", this.current_stack);
 
     let out = {};
     yaml.loadAll(stack, doc => deepMixIn(out, doc));
     out = sortObjByKey(out);
 
-
     // strip all filtered services
     if(filter) {
-      let f_configs = [], f_volumes = [], f_networks = [];
+      let f_configs  = [];
+      let f_volumes  = [];
+      let f_networks = [];
 
       for(let [service_name, service] of Object.entries(out.services)) {
         if(!service_name.includes(filter)) {
@@ -94,8 +90,6 @@ class dspp {
           f_networks.push(typeof v == "string" ? v : k);
       }
 
-
-
       for(let config_name in out.configs) {
         if(!f_configs.includes(config_name))
           delete out.configs[config_name];
@@ -109,10 +103,7 @@ class dspp {
         if(!f_networks.includes(network_name))
           delete out.networks[network_name];
       }
-
-
     }
-
 
     if(process_config) {
       let config_map = {};
@@ -133,9 +124,7 @@ class dspp {
       }
     }
 
-
     let body = yaml.dump({
-
       version  : out.version,
       configs  : isEmpty(out.configs)  ? undefined : out.configs,
       secrets  : isEmpty(out.secrets)  ? undefined : out.secrets,
@@ -159,13 +148,13 @@ class dspp {
     if(fs.readFileSync(before, 'utf-8') == this.compiled)
       return console.log("No changes detected");
 
-    let style = 0, commit;
+    let style = 0;
+    let commit;
 
     let next = tmppath();
     fs.writeFileSync(next, this.compiled);
 
     do {
-
       if(style == 1)
         await passthru(`diff -y <(echo -e "current stack\\n---"; cat "${before}") <(echo -e "next stack\n---"; cat  "${next}") | colordiff | most`);
 
@@ -202,14 +191,34 @@ class dspp {
   }
 
   // import
-  async _cas(config_name, {file : config_file}) {
-    let contents = fs.readFileSync(config_file);
-    let hash     = md5(contents);
+  async _cas(config_name, config) {
+    let configs_files = [];
+
+    if(config['file'])
+      configs_files.push(config['file']);
+
+    if(config['glob-yaml'])
+      configs_files = configs_files.concat(configs_files, glob(`${config['glob-yaml']}/**/*.+(yml|yaml)`));
+
+    let configs = [];
+
+    for(let config_file of configs_files)
+      configs.push('' + fs.readFileSync(config_file));
+
+    if(!configs.length)
+      throw 'You did not provide any config in your config directive';
+
+    return this._write_cas(config_name, configs.join('\n---\n'));
+  }
+
+  async _write_cas(config_name, cas_content) {
+    let hash     = md5(cas_content);
     let cas_path = path.join(CACHE_CAS_PATH, hash);
     let cas_name = config_name + '-' + hash.substr(0, 5);
-    if(fs.existsSync(cas_path))
-      return {hash, cas_path, cas_name};
-    fs.writeFileSync(cas_path, contents);
+
+    if(!fs.existsSync(cas_path))
+      fs.writeFileSync(cas_path, cas_content);
+
     return {hash, cas_path, cas_name};
   }
 }
@@ -235,7 +244,6 @@ function sortObjByKey(value) {
 const isEmpty = function(obj) {
   return Object.keys(obj || {}).length === 0;
 };
-
 
 
 if(module.parent === null) //ensure module is called directly, i.e. not required
