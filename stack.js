@@ -110,9 +110,10 @@ class dspp {
       for(let [config_name, config] of Object.entries(out.configs || {})) {
         if(config.external)
           continue;
-
         let {cas_path, cas_name} = config_map[config_name] = await this._cas(config_name, config);
         out.configs[cas_name] = {...out.configs[config_name], file : cas_path};
+
+        delete out.configs[cas_name]['glob-yaml'];
         delete out.configs[config_name];
       }
 
