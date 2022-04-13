@@ -50,11 +50,11 @@ class dspp {
     this.current_stack   = `.docker-stack/${this.stack_name}.yml`;
 
     if(filter) {
-      console.log("Filter stack for '%s'", filter);
+      console.error("Filter stack for '%s'", filter);
       this.current_stack   = `.docker-stack/${this.stack_name}.${filter}.yml`;
     }
 
-    console.log(`Working with stack '%s' from %d files and %d env files`, this.stack_name, config.files.length, (config['env-files'] || []).length);
+    console.error(`Working with stack '%s' from %d files and %d env files`, this.stack_name, config.files.length, (config['env-files'] || []).length);
 
     let env = '';
     for(let compose_file of config['env-files'] || [])
@@ -64,7 +64,7 @@ class dspp {
     for(let compose_file of config.files || [])
       stack += env + fs.readFileSync(compose_file, 'utf-8') + `\n---\n`;
 
-    console.log("Working in %s", this.current_stack);
+    console.error("Working in %s", this.current_stack);
 
     let out = {};
     yaml.loadAll(stack, doc => deepMixIn(out, doc));
@@ -138,20 +138,30 @@ class dspp {
     let stack_revision = md5(stack + body).substr(0, 5); //source + compiled
     let header = `# ${this.stack_name} @${stack_revision} (dspp v${DSPP_VERSION})\n`;
     this.compiled = header + body;
+    this.stack_revision = stack_revision;
   }
 
 
-  async compile() {
+  async compile(commit = false) {
+    let result = {};
+
     await this._parse();
+
+    result.stack_revision = this.stack_revision;
 
     let before = fs.existsSync(this.current_stack) ? this.current_stack : "/dev/null";
 
-    if(fs.readFileSync(before, 'utf-8') == this.compiled)
-      return console.log("No changes detected");
+    if(fs.readFileSync(before, 'utf-8') == this.compiled) {
+      console.error("No changes detected");
+      return result;
+    }
+
+    if(commit) {
+      fs.writeFileSync(this.current_stack, this.compiled);
+      return result;
+    }
 
     let style = 0;
-    let commit;
-
     let next = tmppath();
     fs.writeFileSync(next, this.compiled);
 
@@ -176,16 +186,17 @@ class dspp {
 
     if(commit == "y") {
       fs.writeFileSync(this.current_stack, this.compiled);
-      console.log("Stack wrote in", this.current_stack);
+      console.error("Stack wrote in", this.current_stack);
     }
 
+    return result;
   }
 
   async deploy() {
     await this._parse();
 
     if(!fs.existsSync(this.current_stack) || fs.readFileSync(this.current_stack, 'utf-8') != this.compiled)
-      return console.log("Change detected, please compile first");
+      return console.error("Change detected, please compile first");
 
     await passthru(`docker stack deploy --with-registry-auth --compose-file - ${this.stack_name} < "${this.current_stack}"`);
     await passthru(`docker service ls`);
