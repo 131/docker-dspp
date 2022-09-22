@@ -292,6 +292,8 @@ const replaceEnv = function(str, dict) {
 };
 
 const replaceEnvRecursive = function(obj, dict = process.env) {
+  if(obj === null)
+    return null;
 
   if(Array.isArray(obj)) {
     for(const [key, value] of Object.entries(obj))
