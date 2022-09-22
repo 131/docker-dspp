@@ -9,11 +9,17 @@ const path  = require('path');
 const spawn = require('child_process').spawn;
 
 const deepMixIn  = require('mout/object/deepMixIn');
+const get        = require('mout/object/get');
+const map        = require('mout/object/map');
+
 const mkdirpSync = require('nyks/fs/mkdirpSync');
 const prompt     = require('cnyks/prompt/prompt');
 const md5        = require('nyks/crypto/md5');
 const tmppath    = require('nyks/fs/tmppath');
 const wait       = require('nyks/child_process/wait');
+
+
+
 
 const yaml = require('js-yaml');
 
@@ -28,6 +34,8 @@ const CACHE_CAS_PATH   = path.join(CACHE_STACK_PATH, ".cas");
 class dspp {
 
   constructor(config_file, filter = null) {
+    console.error("Hi", `dspp v${DSPP_VERSION}`);
+
     if(!fs.existsSync(config_file))
       throw `Usage dspp [config_file]`;
 
@@ -69,6 +77,9 @@ class dspp {
     let out = {};
     yaml.loadAll(stack, doc => deepMixIn(out, doc));
     out = sortObjByKey(out);
+
+    for(let [service_name, service] of Object.entries(out.services || {}))
+      out.services[service_name] = replaceEnvRecursive(service, {...service, service_name});
 
     // strip all filtered services
     if(filter) {
@@ -261,4 +272,48 @@ const isEmpty = function(obj) {
 if(module.parent === null) //ensure module is called directly, i.e. not required
   require('cnyks/lib/bundle')(dspp); //start runner
 
+
+
+const replaceEnv = function(str, dict) {
+  const mask = /(?:\$\$([a-z][a-z0-9_]+))|(?:\$\$\{([a-z][a-z0-9_]+)\})/ig;
+
+  let match;
+  do {
+    match = mask.exec(str);
+    if(match === null)
+      break;
+
+    const key = match[1] || match[2];
+    if(get(dict, key) !== undefined)
+      str = str.replace(match[0], get(dict, key));
+  } while(true);
+
+  return str;
+};
+
+const replaceEnvRecursive = function(obj, dict = process.env) {
+
+  if(Array.isArray(obj)) {
+    for(const [key, value] of Object.entries(obj))
+      obj[key] = replaceEnv(value, dict);
+    return obj;
+  }
+
+  if(typeof obj === 'string')
+    return replaceEnv(obj, dict);
+
+  if(typeof obj === 'object')
+    return map(obj, (v) => replaceEnvRecursive(v, dict));
+
+  return obj;
+};
+
+
+
+
+
+
 module.exports = dspp;
+
+
+
