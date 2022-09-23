@@ -10,8 +10,8 @@ const spawn = require('child_process').spawn;
 
 const deepMixIn  = require('mout/object/deepMixIn');
 const get        = require('mout/object/get');
-const map        = require('mout/object/map');
 
+const walk       = require('nyks/object/walk');
 const mkdirpSync = require('nyks/fs/mkdirpSync');
 const prompt     = require('cnyks/prompt/prompt');
 const md5        = require('nyks/crypto/md5');
@@ -79,7 +79,7 @@ class dspp {
     out = sortObjByKey(out);
 
     for(let [service_name, service] of Object.entries(out.services || {}))
-      out.services[service_name] = replaceEnvRecursive(service, {...service, service_name});
+      out.services[service_name] = walk(service, v =>  replaceEnv(v, {...service, service_name}));
 
     // strip all filtered services
     if(filter) {
@@ -275,47 +275,17 @@ if(module.parent === null) //ensure module is called directly, i.e. not required
 
 
 const replaceEnv = function(str, dict) {
-  const mask = /(?:\$\$([a-z][a-z0-9_]+))|(?:\$\$\{([a-z][a-z0-9_]+)\})/ig;
-
-  let match;
-  do {
-    match = mask.exec(str);
-    if(match === null)
-      break;
-
+  let mask = /(?:\$\$([a-z0-9._-]+))|(?:\$\$\{([a-z0-9._-]+)\})/i, match;
+  if((match = mask.exec(str))) {
     const key = match[1] || match[2];
     if(get(dict, key) !== undefined)
-      str = str.replace(match[0], get(dict, key));
-  } while(true);
-
+      return replaceEnv(str.replace(match[0], get(dict, key)), dict);
+  }
   return str;
 };
-
-const replaceEnvRecursive = function(obj, dict = process.env) {
-  if(obj === null)
-    return null;
-
-  if(Array.isArray(obj)) {
-    for(const [key, value] of Object.entries(obj))
-      obj[key] = replaceEnv(value, dict);
-    return obj;
-  }
-
-  if(typeof obj === 'string')
-    return replaceEnv(obj, dict);
-
-  if(typeof obj === 'object')
-    return map(obj, (v) => replaceEnvRecursive(v, dict));
-
-  return obj;
-};
-
-
-
 
 
 
 module.exports = dspp;
-
 
 
