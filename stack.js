@@ -140,7 +140,6 @@ class dspp {
       networks  : isEmpty(out.networks) ? undefined : out.networks,
       volumes   : isEmpty(out.volumes)  ? undefined : out.volumes,
       services  : isEmpty(out.services) ? undefined : out.services,
-      'x-tasks' : isEmpty(out.tasks)    ? undefined : out.tasks, //so we can trace it
     }, {quotingType : '"', lineWidth : -1, noCompatMode : true});
 
     let stack_revision = md5(stack + body).substr(0, 5); //source + compiled
