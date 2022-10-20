@@ -1,0 +1,29 @@
+version: "3.8"
+
+configs:
+  keepalived-rproxy-config:
+    file: ./services/keepalived/keepalived.conf
+
+services:
+  keepalived-rproxy:
+
+    image: docker.io/131hub/keepalived:v2.0.20
+
+    configs:
+      - source: keepalived-rproxy-config
+        target: /etc/keepalived/keepalived.conf
+
+    networks:
+      - host
+
+    cap_add:
+      - NET_ADMIN
+      - NET_BROADCAST
+      - NET_RAW
+
+    deploy: *deploy-rproxy
+
+    logging:
+      driver: journald
+      options:
+        tag: keepalived-rproxy

@@ -1,0 +1,15 @@
+x-env:
+  - &STACK_NS STACK_NS=production
+
+x-deploys:
+  - &deploy-bg1
+    replicas: 1
+    placement:
+      constraints:
+        - engine.labels.background-cluster == true
+
+  - &deploy-rproxy
+    replicas: 1
+    placement:
+      constraints:
+        - engine.labels.background-cluster == true

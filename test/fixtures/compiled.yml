@@ -1,0 +1,88 @@
+# dspp-stack @83005 (dspp v4.0.0)
+version: "3.8"
+configs:
+  keepalived-rproxy-config-13add:
+    file: .docker-stack/.cas/13add6c2c6441f1e9ad39017c7d4f45b
+services:
+  clock:
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+      replicas: 1
+    environment:
+      - DEBUG=*:*,-*:debug
+      - DEBUG_FORMAT=:namespace :body
+      - DEBUG_INSPECT_BREAKLENGTH=0
+    image: si/clock:v1.0.1
+    logging:
+      driver: gelf
+      options:
+        env: X-OVH-TOKEN
+        gelf-address: udp://gra2.logs.ovh.com:2202
+        tag: clock
+  keepalived-rproxy:
+    cap_add:
+      - NET_ADMIN
+      - NET_BROADCAST
+      - NET_RAW
+    configs:
+      - source: keepalived-rproxy-config-13add
+        target: /etc/keepalived/keepalived.conf
+    deploy:
+      placement:
+        constraints:
+          - engine.labels.background-cluster == true
+      replicas: 1
+    image: docker.io/131hub/keepalived:v2.0.20
+    logging:
+      driver: journald
+      options:
+        tag: keepalived-rproxy
+    networks:
+      - host
+  rproxy-local:
+    deploy:
+      labels:
+        - prometheus-job=rproxy-local
+        - prometheus-port=8088
+        - prometheus-path=/status
+      placement:
+        constraints:
+          - engine.labels.background-cluster == true
+      replicas: 1
+    environment:
+      - DEBUG=*
+      - X_NGINX_ACCESS_LOG=syslog:server=gra2.logs.ovh.com:2201,nohostname
+    image: infra/rproxy:v1.1.8
+    logging:
+      driver: gelf
+      options:
+        env: X-OVH-TOKEN
+        gelf-address: udp://gra2.logs.ovh.com:2202
+        tag: rproxy-local
+    networks:
+      - default
+      - cluster-web
+      - devops-monitoring
+    ports:
+      - mode: host
+        protocol: tcp
+        published: 1080
+        target: 80
+      - mode: host
+        protocol: tcp
+        published: 1442
+        target: 443
+      - mode: host
+        protocol: tcp
+        published: 1443
+        target: 1443
+      - mode: host
+        protocol: tcp
+        published: 1444
+        target: 1444
+      - mode: host
+        protocol: tcp
+        published: 1445
+        target: 1445

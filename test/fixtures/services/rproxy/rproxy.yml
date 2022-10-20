@@ -1,0 +1,53 @@
+version: "3.8"
+
+services:
+  rproxy-local:
+    image: infra/rproxy:v1.1.8
+    ports:
+      - published: 1080
+        target: 80
+        protocol: tcp
+        mode: host
+      - published: 1442
+        target: 443
+        protocol: tcp
+        mode: host
+      - published: 1443
+        target: 1443
+        protocol: tcp
+        mode: host
+      - published: 1444
+        target: 1444
+        protocol: tcp
+        mode: host
+      - published: 1445
+        target: 1445
+        protocol: tcp
+        mode: host
+
+    networks:
+      - default
+      - cluster-web
+      - devops-monitoring
+
+
+    environment:
+      - DEBUG=*
+      - X_NGINX_ACCESS_LOG=syslog:server=gra2.logs.ovh.com:2201,nohostname
+
+    deploy:
+      << : *deploy-rproxy
+
+      labels:
+        - prometheus-job=rproxy-local
+        - prometheus-port=8088
+        - prometheus-path=/status
+
+#    healthcheck:
+#      disable: true
+    logging:
+      driver: gelf
+      options:
+        gelf-address: "udp://gra2.logs.ovh.com:2202"
+        env: X-OVH-TOKEN
+        tag: rproxy-local

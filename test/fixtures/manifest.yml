@@ -1,0 +1,11 @@
+name: dspp-stack
+
+env-files:
+  - env/macros.yml
+
+files:
+  - services/clock/clock.yml
+  - services/rproxy/rproxy.yml
+  - services/keepalived/keepalived.yml
+
+
