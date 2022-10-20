@@ -75,7 +75,7 @@ class dspp {
       out.services[service_name] = walk(service, v =>  replaceEnv(v, {...service, service_name}));
 
     for(let [task_name, task] of Object.entries(out.tasks || {}))
-      out.tasks[task_name]  = walk(task, v =>  replaceEnv(v, {...task, task_name}));
+      out.tasks[task_name]  = walk(task, v =>  replaceEnv(v, {...task, task_name, service_name : task_name}));
 
     // strip all filtered services
     if(filter) {
