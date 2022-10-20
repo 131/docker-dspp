@@ -269,7 +269,7 @@ class dspp {
     let cas_path = path.join(CACHE_CAS_PATH, hash);
     let cas_name = config_name + '-' + hash.substr(0, 5);
 
-    return {hash, cas_path, cas_name, config_body};
+    return {hash, cas_path, cas_name, cas_content : config_body};
   }
 
 }
