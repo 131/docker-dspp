@@ -4,7 +4,6 @@
 const {version : DSPP_VERSION } = require('./package.json');
 
 const fs    = require('fs');
-const glob  = require('glob').sync;
 const path  = require('path');
 const spawn = require('child_process').spawn;
 
@@ -18,7 +17,7 @@ const md5        = require('nyks/crypto/md5');
 const tmppath    = require('nyks/fs/tmppath');
 const wait       = require('nyks/child_process/wait');
 
-
+const {dict}  = require('nyks/process/parseArgs')();
 
 
 const yaml = require('js-yaml');
@@ -33,36 +32,28 @@ const CACHE_CAS_PATH   = path.join(CACHE_STACK_PATH, ".cas");
 
 class dspp {
 
-  constructor(config_file, filter = null) {
+  constructor(config_file = null, filter = null) {
     console.error("Hi", `dspp v${DSPP_VERSION}`);
 
-    if(!fs.existsSync(config_file))
-      throw `Usage dspp [config_file]`;
+    this.config   = {};
+    if(!config_file && 'file' in dict) {
+      let {file, env} = dict;
+      this.config.files        = typeof file == "string" ? [file] : file;
+      this.config['env-files'] = typeof env == "string"  ? [env]  : env;
+    }
 
-    this.config_file = config_file;
-    this.filter      = filter;
-
-    mkdirpSync(CACHE_STACK_PATH);
-    mkdirpSync(CACHE_CAS_PATH);
+    if(fs.existsSync(config_file)) {
+      let config = fs.readFileSync(config_file, 'utf-8');
+      this.config = {name : path.basename(config_file, '.yml'), ...yaml.load(config)};
+    }
+    this.stack_name  = this.config.name || "stack";
+    this.filter   = filter;
   }
 
   async _parse() {
-    let process_config = true;
 
-    let {config_file, filter} = this;
-
-    let config = fs.readFileSync(config_file, 'utf-8');
-    config = yaml.load(config);
-
-    this.stack_name  = config.name || path.basename(config_file, '.yml');
-    this.current_stack   = `.docker-stack/${this.stack_name}.yml`;
-
-    if(filter) {
-      console.error("Filter stack for '%s'", filter);
-      this.current_stack   = `.docker-stack/${this.stack_name}.${filter}.yml`;
-    }
-
-    console.error(`Working with stack '%s' from %d files and %d env files`, this.stack_name, config.files.length, (config['env-files'] || []).length);
+    let {filter, config, stack_name} = this;
+    let stack_file = `${stack_name}.yml`;
 
     let env = '';
     for(let compose_file of config['env-files'] || [])
@@ -72,17 +63,24 @@ class dspp {
     for(let compose_file of config.files || [])
       stack += env + fs.readFileSync(compose_file, 'utf-8') + `\n---\n`;
 
-    console.error("Working in %s", this.current_stack);
-
     let out = {};
     yaml.loadAll(stack, doc => deepMixIn(out, doc));
     out = sortObjByKey(out);
 
+    let cas = {};
+
+    out = walk(out, v =>  replaceEnv(v, out));
+
     for(let [service_name, service] of Object.entries(out.services || {}))
       out.services[service_name] = walk(service, v =>  replaceEnv(v, {...service, service_name}));
 
+    for(let [task_name, task] of Object.entries(out.tasks || {}))
+      out.tasks[task_name]  = walk(task, v =>  replaceEnv(v, {...task, task_name}));
+
     // strip all filtered services
     if(filter) {
+      stack_file = `${stack_name}.${filter}.yml`;
+
       let f_configs  = [];
       let f_volumes  = [];
       let f_networks = [];
@@ -92,7 +90,6 @@ class dspp {
           delete out.services[service_name];
           continue;
         }
-
         for(let config of service.configs || [])
           f_configs.push(config.source);
         for(let volume of service.volumes || [])
@@ -100,6 +97,7 @@ class dspp {
         for(let [k, v] of Object.entries(service.networks || {}))
           f_networks.push(typeof v == "string" ? v : k);
       }
+
 
       for(let config_name in out.configs) {
         if(!f_configs.includes(config_name))
@@ -116,65 +114,98 @@ class dspp {
       }
     }
 
-    if(process_config) {
-      let config_map = {};
-      for(let [config_name, config] of Object.entries(out.configs || {})) {
-        if(config.external)
-          continue;
-        let {cas_path, cas_name} = config_map[config_name] = await this._cas(config_name, config);
-        out.configs[cas_name] = {...out.configs[config_name], file : cas_path};
+    let config_map = {};
+    for(let [config_name, config] of Object.entries(out.configs || {})) {
+      if(config.external)
+        continue;
+      let {cas_path, cas_name, cas_content} = config_map[config_name] = await this._cas(config_name, config);
+      cas[cas_path] = cas_content;
 
-        delete out.configs[cas_name]['glob-yaml'];
-        delete out.configs[config_name];
-      }
+      let {external, name} = out.configs[config_name];
+      out.configs[cas_name] = {external, name, file : cas_path};
+      delete out.configs[config_name];
+    }
 
-      for(let service of Object.values(out.services)) {
-        for(let config of service.configs || []) {
-          if(config_map[config.source])
-            config.source = config_map[config.source]['cas_name'];
-        }
+    for(let service of Object.values(out.services || {})) {
+      for(let config of service.configs || []) {
+        if(config_map[config.source])
+          config.source = config_map[config.source]['cas_name'];
       }
     }
 
     let body = yaml.dump({
-      version  : out.version,
-      configs  : isEmpty(out.configs)  ? undefined : out.configs,
-      secrets  : isEmpty(out.secrets)  ? undefined : out.secrets,
-      networks : isEmpty(out.networks) ? undefined : out.networks,
-      volumes  : isEmpty(out.volumes)  ? undefined : out.volumes,
-      services : isEmpty(out.services) ? undefined : out.services,
-
+      version   : out.version,
+      configs   : isEmpty(out.configs)  ? undefined : out.configs,
+      secrets   : isEmpty(out.secrets)  ? undefined : out.secrets,
+      networks  : isEmpty(out.networks) ? undefined : out.networks,
+      volumes   : isEmpty(out.volumes)  ? undefined : out.volumes,
+      services  : isEmpty(out.services) ? undefined : out.services,
+      'x-tasks' : isEmpty(out.tasks)    ? undefined : out.tasks, //so we can trace it
     }, {quotingType : '"', lineWidth : -1, noCompatMode : true});
 
     let stack_revision = md5(stack + body).substr(0, 5); //source + compiled
-    let header = `# ${this.stack_name} @${stack_revision} (dspp v${DSPP_VERSION})\n`;
-    this.compiled = header + body;
-    this.stack_revision = stack_revision;
+
+    let header = `# ${stack_name} @${stack_revision} (dspp v${DSPP_VERSION})\n`;
+    return {
+      stack_revision,
+      cas,
+      compiled : header + body,
+      stack_file,
+    };
+  }
+
+  async parse() {
+    let {compiled} = await this._parse();
+    return compiled;
   }
 
 
   async compile(commit = false) {
-    let result = {};
 
-    await this._parse();
+    let {filter, config, stack_name} = this;
 
-    result.stack_revision = this.stack_revision;
+    console.error(`Working with stack '%s' from %d files and %d env files`, stack_name, config.files.length, (config['env-files'] || []).length);
 
-    let before = fs.existsSync(this.current_stack) ? this.current_stack : "/dev/null";
+    if(filter)
+      console.error("Filter stack for '%s'", filter);
 
-    if(fs.readFileSync(before, 'utf-8') == this.compiled) {
+    let {compiled, stack_revision, cas, stack_file} = await this._parse();
+    let stack_path = path.join(CACHE_STACK_PATH, stack_file);
+
+    let result = {stack_revision};
+
+    console.error("Working in %s", stack_path);
+
+    let write = function() {
+      mkdirpSync(CACHE_STACK_PATH);
+      mkdirpSync(CACHE_CAS_PATH);
+
+      fs.writeFileSync(stack_path, compiled);
+      console.error("Stack wrote in", stack_path);
+
+      for(let [cas_path, cas_content] of Object.entries(cas)) {
+        if(!fs.existsSync(cas_path))
+          fs.writeFileSync(cas_path, cas_content);
+      }
+
+      return result;
+    };
+
+
+
+    let before = fs.existsSync(stack_path) ? stack_path : "/dev/null";
+
+    if(fs.readFileSync(before, 'utf-8') == compiled) {
       console.error("No changes detected");
       return result;
     }
 
-    if(commit) {
-      fs.writeFileSync(this.current_stack, this.compiled);
-      return result;
-    }
+    if(commit)
+      return write();
 
     let style = 0;
     let next = tmppath();
-    fs.writeFileSync(next, this.compiled);
+    fs.writeFileSync(next, compiled);
 
     do {
       if(style == 1)
@@ -195,55 +226,52 @@ class dspp {
       style ^= 1;
     } while(true);
 
-    if(commit == "y") {
-      fs.writeFileSync(this.current_stack, this.compiled);
-      console.error("Stack wrote in", this.current_stack);
-    }
+    if(commit == "y")
+      return write();
 
     return result;
   }
 
   async deploy() {
-    await this._parse();
 
-    if(!fs.existsSync(this.current_stack) || fs.readFileSync(this.current_stack, 'utf-8') != this.compiled)
+    let {compiled, stack_file} = await this._parse();
+    let stack_path = path.join(CACHE_STACK_PATH, stack_file);
+
+    if(!fs.existsSync(stack_path) || fs.readFileSync(stack_path, 'utf-8') != compiled)
       return console.error("Change detected, please compile first");
 
-    await passthru(`docker stack deploy --with-registry-auth --compose-file - ${this.stack_name} < "${this.current_stack}"`);
+    await passthru(`docker stack deploy --with-registry-auth --compose-file - ${this.stack_name} < "${stack_path}"`);
     await passthru(`docker service ls`);
   }
 
   // import
   async _cas(config_name, config) {
-    let configs_files = [];
+    let config_body;
 
     if(config['file'])
-      configs_files.push(config['file']);
+      config_body = fs.readFileSync(config['file'], 'utf-8');
 
-    if(config['glob-yaml'])
-      configs_files = configs_files.concat(configs_files, glob(`${config['glob-yaml']}/**/*.+(yml|yaml)`));
+    if(config['contents']) {
+      let {format, contents} = config;
+      if(format == "json")
+        config_body = JSON.stringify(contents, null, 2);
+      else if(format == "yaml")
+        config_body = yaml.dump(contents, {quotingType : '"', lineWidth : -1, noCompatMode : true});
+      else
+        config_body = String(contents);
+    }
 
-    let configs = [];
-
-    for(let config_file of configs_files)
-      configs.push('' + fs.readFileSync(config_file));
-
-    if(!configs.length)
+    if(!config_body)
       throw 'You did not provide any config in your config directive';
 
-    return this._write_cas(config_name, configs.join('\n---\n'));
-  }
 
-  async _write_cas(config_name, cas_content) {
-    let hash     = md5(cas_content);
+    let hash     = md5(config_body);
     let cas_path = path.join(CACHE_CAS_PATH, hash);
     let cas_name = config_name + '-' + hash.substr(0, 5);
 
-    if(!fs.existsSync(cas_path))
-      fs.writeFileSync(cas_path, cas_content);
-
-    return {hash, cas_path, cas_name};
+    return {hash, cas_path, cas_name, config_body};
   }
+
 }
 
 
@@ -278,8 +306,11 @@ const replaceEnv = function(str, dict) {
   let mask = /(?:\$\$([a-z0-9._-]+))|(?:\$\$\{([a-z0-9._-]+)\})/i, match;
   if((match = mask.exec(str))) {
     const key = match[1] || match[2];
-    if(get(dict, key) !== undefined)
+    if(get(dict, key) !== undefined) {
+      if(typeof get(dict, key) == "object")
+        return get(dict, key);
       return replaceEnv(str.replace(match[0], get(dict, key)), dict);
+    }
   }
   return str;
 };
