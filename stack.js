@@ -8,7 +8,7 @@ const path  = require('path');
 const spawn = require('child_process').spawn;
 
 const deepMixIn  = require('mout/object/deepMixIn');
-const get        = require('mout/object/get');
+const dive       = require('nyks/object/dive');
 
 const walk       = require('nyks/object/walk');
 const mkdirpSync = require('nyks/fs/mkdirpSync');
@@ -302,13 +302,14 @@ if(module.parent === null) //ensure module is called directly, i.e. not required
 
 
 const replaceEnv = function(str, dict) {
-  let mask = /(?:\$\$([a-z0-9._-]+))|(?:\$\$\{([a-z0-9._-]+)\})/i, match;
+  let mask = /(?:\$\$([a-z0-9._-]+))|(?:\$\$\{([^}]+)\})/i, match;
   if((match = mask.exec(str))) {
     const key = match[1] || match[2];
-    if(get(dict, key) !== undefined) {
-      if(typeof get(dict, key) == "object")
-        return get(dict, key);
-      return replaceEnv(str.replace(match[0], get(dict, key)), dict);
+    let v = dive(dict, key);
+    if(v !== undefined) {
+      if(typeof v == "object")
+        return v;
+      return replaceEnv(str.replace(match[0], v), dict);
     }
   }
   return str;
