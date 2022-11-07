@@ -8,7 +8,7 @@ const path  = require('path');
 const spawn = require('child_process').spawn;
 
 const deepMixIn  = require('mout/object/deepMixIn');
-const dive       = require('nyks/object/dive');
+const jqdive     = require('nyks/object/jqdive');
 
 const walk       = require('nyks/object/walk');
 const mkdirpSync = require('nyks/fs/mkdirpSync');
@@ -305,7 +305,7 @@ const replaceEnv = function(str, dict) {
   let mask = /(?:\$\$([a-z0-9._-]+))|(?:\$\$\{([^}]+)\})/i, match;
   if((match = mask.exec(str))) {
     const key = match[1] || match[2];
-    let v = dive(dict, key);
+    let v = jqdive(dict, key);
     if(v !== undefined) {
       if(typeof v == "object")
         return v;
