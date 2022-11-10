@@ -118,11 +118,13 @@ class dspp {
     for(let [config_name, config] of Object.entries(out.configs || {})) {
       if(config.external)
         continue;
-      let {cas_path, cas_name, cas_content} = config_map[config_name] = await this._cas(config_name, config);
+      let {cas_path, cas_name, cas_content, trace} = config_map[config_name] = await this._cas(config_name, config);
       cas[cas_path] = cas_content;
 
       let {external, name} = out.configs[config_name];
       out.configs[cas_name] = {external, name, file : cas_path};
+      if(trace)
+        out.configs[cas_name]['x-trace'] = trace;
       delete out.configs[config_name];
     }
 
@@ -140,7 +142,7 @@ class dspp {
       networks  : isEmpty(out.networks) ? undefined : out.networks,
       volumes   : isEmpty(out.volumes)  ? undefined : out.volumes,
       services  : isEmpty(out.services) ? undefined : out.services,
-    }, {quotingType : '"', lineWidth : -1, noCompatMode : true});
+    }, {quotingType : '"', lineWidth : -1, noCompatMode : true, noRefs : true});
 
     let stack_revision = md5(stack + body).substr(0, 5); //source + compiled
 
@@ -246,18 +248,24 @@ class dspp {
   // import
   async _cas(config_name, config) {
     let config_body;
+    let {file, contents, format, trace = true} = config;
 
-    if(config['file'])
-      config_body = fs.readFileSync(config['file'], 'utf-8');
+    if(file) {
+      config_body = fs.readFileSync(file, 'utf-8');
+      if(trace)
+        trace = config_body;
+    }
 
-    if(config['contents']) {
-      let {format, contents} = config;
+    if(contents) {
       if(format == "json")
         config_body = JSON.stringify(contents, null, 2);
       else if(format == "yaml")
         config_body = yaml.dump(contents, {quotingType : '"', lineWidth : -1, noCompatMode : true});
       else
         config_body = String(contents);
+
+      if(trace)
+        trace = contents;
     }
 
     if(!config_body)
@@ -268,7 +276,7 @@ class dspp {
     let cas_path = path.join(CACHE_CAS_PATH, hash);
     let cas_name = config_name + '-' + hash.substr(0, 5);
 
-    return {hash, cas_path, cas_name, cas_content : config_body};
+    return {hash, cas_path, cas_name, cas_content : config_body, trace};
   }
 
 }
