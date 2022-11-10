@@ -3,6 +3,7 @@ version: "3.8"
 configs:
   keepalived-rproxy-config:
     file: ./services/keepalived/keepalived.conf
+    trace: false
 
 services:
   keepalived-rproxy:

@@ -1,11 +1,13 @@
 version: "3.8"
 
+configs:
+  clock-config:
+    contents: $${services.clock.environment.CLOCK_TZ}
+
 services:
   clock:
     environment:
-      - DEBUG=*:*,-*:debug
-      - DEBUG_FORMAT=:namespace :body
-      - DEBUG_INSPECT_BREAKLENGTH=0
+      CLOCK_TZ: America/Dallas
 
     image: si/clock:v1.0.1
 

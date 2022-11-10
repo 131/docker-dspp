@@ -1,6 +1,9 @@
-# dspp-stack @83005 (dspp v4.0.0)
+# dspp-stack @c8642 (dspp v4.2.0)
 version: "3.8"
 configs:
+  clock-config-0d169:
+    file: .docker-stack/.cas/0d169a03c84efedb0cdb5380677e129e
+    x-trace: America/Dallas
   keepalived-rproxy-config-13add:
     file: .docker-stack/.cas/13add6c2c6441f1e9ad39017c7d4f45b
 services:
@@ -11,9 +14,7 @@ services:
           - node.role == manager
       replicas: 1
     environment:
-      - DEBUG=*:*,-*:debug
-      - DEBUG_FORMAT=:namespace :body
-      - DEBUG_INSPECT_BREAKLENGTH=0
+      CLOCK_TZ: America/Dallas
     image: si/clock:v1.0.1
     logging:
       driver: gelf
