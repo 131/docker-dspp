@@ -248,7 +248,7 @@ class dspp {
   // import
   async _cas(config_name, config) {
     let config_body;
-    let {file, contents, format, trace = true} = config;
+    let {file, contents, format, 'x-trace' : trace = true} = config;
 
     if(file) {
       config_body = fs.readFileSync(file, 'utf-8');

@@ -1,4 +1,4 @@
-# dspp-stack @c8642 (dspp v4.2.0)
+# dspp-stack @abbe6 (dspp v4.2.1)
 version: "3.8"
 configs:
   clock-config-0d169:
