@@ -9,6 +9,7 @@ const spawn = require('child_process').spawn;
 
 const deepMixIn  = require('mout/object/deepMixIn');
 const jqdive     = require('nyks/object/jqdive');
+const glob       = require('glob').sync;
 
 const walk       = require('nyks/object/walk');
 const mkdirpSync = require('nyks/fs/mkdirpSync');
@@ -18,7 +19,6 @@ const tmppath    = require('nyks/fs/tmppath');
 const wait       = require('nyks/child_process/wait');
 
 const {dict}  = require('nyks/process/parseArgs')();
-
 
 const yaml = require('js-yaml');
 
@@ -35,32 +35,56 @@ class dspp {
   constructor(config_file = null, filter = null) {
     console.error("Hi", `dspp v${DSPP_VERSION}`);
 
-    this.config   = {};
+    let config   = {files : [], name : "stack"};
     if(!config_file && 'file' in dict) {
-      let {file, env} = dict;
-      this.config.files        = typeof file == "string" ? [file] : file;
-      this.config['env-files'] = typeof env == "string"  ? [env]  : env;
+      let {file, header} = dict;
+      config.files = typeof file == "string" ? [file] : file;
+
+      if(header)
+        (typeof header == "string"  ? [header]  : header).forEach(path => config.files.push({type : 'header', path}));
     }
 
+
     if(fs.existsSync(config_file)) {
-      let config = fs.readFileSync(config_file, 'utf-8');
-      this.config = {name : path.basename(config_file, '.yml'), ...yaml.load(config)};
+      let body = fs.readFileSync(config_file, 'utf-8');
+      config = {name : path.basename(config_file, '.yml'), ...yaml.load(body)};
     }
-    this.stack_name  = this.config.name || "stack";
+
+    this.stack_name  = config.name;
+
+    this.header_files = config.header_files || [];
+    this.compose_files = config.compose_files || [];
+
+    for(let line of config.files) {
+      if(typeof line == 'string')
+        line = {type : 'compose', path : line};
+
+      let type = line.type, path = glob(line.path);
+      if(!path.length)
+        console.error("Empty expansion from", line.path);
+
+      if(type == "header")
+        this.header_files.push(...path);
+      if(type == "compose")
+        this.compose_files.push(...path);
+    }
+
     this.filter   = filter;
   }
 
   async _parse() {
 
-    let {filter, config, stack_name} = this;
+    let {filter, stack_name, header_files, compose_files} = this;
     let stack_file = `${stack_name}.yml`;
 
+
+
     let env = '';
-    for(let compose_file of config['env-files'] || [])
-      env += fs.readFileSync(compose_file, 'utf-8') + `\n`;
+    for(let header_file of header_files)
+      env += fs.readFileSync(header_file, 'utf-8') + `\n`;
 
     let stack = '';
-    for(let compose_file of config.files || [])
+    for(let compose_file of compose_files || [])
       stack += env + fs.readFileSync(compose_file, 'utf-8') + `\n---\n`;
 
     let out = {};
@@ -163,9 +187,9 @@ class dspp {
 
   async compile(commit = false) {
 
-    let {filter, config, stack_name} = this;
+    let {filter, compose_files, header_files, stack_name} = this;
 
-    console.error(`Working with stack '%s' from %d files and %d env files`, stack_name, config.files.length, (config['env-files'] || []).length);
+    console.error(`Working with stack '%s' from %d files and %d env files`, stack_name, compose_files.length, header_files.length);
 
     if(filter)
       console.error("Filter stack for '%s'", filter);
@@ -268,8 +292,8 @@ class dspp {
         trace = contents;
     }
 
-    if(!config_body)
-      throw 'You did not provide any config in your config directive';
+    if(config_body == undefined)
+      throw `No body for config '${config_name}'`;
 
 
     let hash     = md5(config_body);
