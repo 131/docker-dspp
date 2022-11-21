@@ -20,15 +20,19 @@ const wait       = require('nyks/child_process/wait');
 
 const {dict}  = require('nyks/process/parseArgs')();
 
-const yaml = require('js-yaml');
+const {stringify, parse, parseAllDocuments,  Parser, Composer} = require('yaml');
 
 function passthru(cmd) {
   let child = spawn(cmd, {shell : '/bin/bash', stdio : 'inherit'});
   return wait(child);
 }
 
+const getType = (obj) => (typeof obj == "object" ? obj.constructor.name : typeof obj);
+
+
 const CACHE_STACK_PATH = ".docker-stack";
 const CACHE_CAS_PATH   = path.join(CACHE_STACK_PATH, ".cas");
+const flatten = obj => JSON.parse(JSON.stringify(obj));
 
 class dspp {
 
@@ -47,7 +51,7 @@ class dspp {
 
     if(fs.existsSync(config_file)) {
       let body = fs.readFileSync(config_file, 'utf-8');
-      config = {name : path.basename(config_file, '.yml'), ...yaml.load(body)};
+      config = {name : path.basename(config_file, '.yml'), ...parse(body)};
     }
 
     this.stack_name  = config.name;
@@ -88,7 +92,10 @@ class dspp {
       stack += env + fs.readFileSync(compose_file, 'utf-8') + `\n---\n`;
 
     let out = {};
-    yaml.loadAll(stack, doc => deepMixIn(out, doc));
+
+
+    parseAllDocuments(stack, {merge : true}).forEach(doc => deepMixIn(out, doc.toJS({maxAliasCount : -1 })));
+
     out = sortObjByKey(out);
 
     let cas = {};
@@ -159,14 +166,15 @@ class dspp {
       }
     }
 
-    let body = yaml.dump({
+
+    let body = stringify(flatten({
       version   : out.version,
       configs   : isEmpty(out.configs)  ? undefined : out.configs,
       secrets   : isEmpty(out.secrets)  ? undefined : out.secrets,
       networks  : isEmpty(out.networks) ? undefined : out.networks,
       volumes   : isEmpty(out.volumes)  ? undefined : out.volumes,
       services  : isEmpty(out.services) ? undefined : out.services,
-    }, {quotingType : '"', lineWidth : -1, noCompatMode : true, noRefs : true});
+    }), {singleQuote : false, lineWidth : 0});
 
     let stack_revision = md5(stack + body).substr(0, 5); //source + compiled
 
@@ -284,7 +292,7 @@ class dspp {
       if(format == "json")
         config_body = JSON.stringify(contents, null, 2);
       else if(format == "yaml")
-        config_body = yaml.dump(contents, {quotingType : '"', lineWidth : -1, noCompatMode : true});
+        config_body = stringify(contents, {singleQuote : false, lineWidth : 0});
       else
         config_body = String(contents);
 
@@ -301,6 +309,53 @@ class dspp {
     let cas_name = config_name + '-' + hash.substr(0, 5);
 
     return {hash, cas_path, cas_name, cas_content : config_body, trace};
+  }
+
+
+  update(path, value) {
+
+    const set = function(body, path, value) {
+      let pos = get(body, path);
+      let start = body.substr(0, pos.range[0]);
+      let end   = body.substr(pos.range[1]);
+      return start + value + end;
+    };
+
+    const get = function (body, path) {
+      const tokens = new Parser().parse(body);
+      const docs = new Composer().compose(tokens);
+      let doc = docs.next().value;
+
+      path = path.split(".");
+      let scope = doc.contents, step;
+      diver: while((step = path.shift())) {
+        if(getType(scope) == "YAMLMap") {
+          for(let pair of scope.items) {
+            if(pair.key.value == step) {
+              scope = pair.value;
+              continue diver;
+
+            }
+          }
+        }
+        return;
+      }
+      return scope;
+    };
+
+    let replaced = false;
+    for(let compose_file of this.compose_files) {
+      let body = fs.readFileSync(compose_file, 'utf8');
+      if(get(body, path)) {
+        body = set(body, path, value);
+        fs.writeFileSync(compose_file, body);
+        console.log("Set %s to %s in %s", path, value, compose_file);
+        replaced = true;
+      }
+    }
+
+    if(!replaced)
+      throw `${path} not found in stack`;
   }
 
 }

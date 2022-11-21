@@ -30,9 +30,9 @@
   "dependencies": {
     "cnyks": "^2.7.1",
     "glob": "^7.2.0",
-    "js-yaml": "^4.1.0",
     "mout": "^1.0.0",
-    "nyks": "^6.6.1"
+    "nyks": "^6.6.1",
+    "yaml": "^2.1.3"
   },
   "devDependencies": {
     "eslint": "^7.21.0",
