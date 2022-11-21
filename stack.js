@@ -27,9 +27,7 @@ function passthru(cmd) {
   return wait(child);
 }
 
-const getType = (obj) => (typeof obj == "object" ? obj.constructor.name : typeof obj);
-
-
+const yamlStyle = {singleQuote : false, lineWidth : 0};
 const CACHE_STACK_PATH = ".docker-stack";
 const CACHE_CAS_PATH   = path.join(CACHE_STACK_PATH, ".cas");
 const flatten = obj => JSON.parse(JSON.stringify(obj));
@@ -174,7 +172,7 @@ class dspp {
       networks  : isEmpty(out.networks) ? undefined : out.networks,
       volumes   : isEmpty(out.volumes)  ? undefined : out.volumes,
       services  : isEmpty(out.services) ? undefined : out.services,
-    }), {singleQuote : false, lineWidth : 0});
+    }), yamlStyle);
 
     let stack_revision = md5(stack + body).substr(0, 5); //source + compiled
 
@@ -292,7 +290,7 @@ class dspp {
       if(format == "json")
         config_body = JSON.stringify(contents, null, 2);
       else if(format == "yaml")
-        config_body = stringify(contents, {singleQuote : false, lineWidth : 0});
+        config_body = stringify(contents, yamlStyle);
       else
         config_body = String(contents);
 
@@ -313,41 +311,21 @@ class dspp {
 
 
   update(path, value) {
+    path = path.split(".");
 
-    const set = function(body, path, value) {
-      let pos = get(body, path);
-      let start = body.substr(0, pos.range[0]);
-      let end   = body.substr(pos.range[1]);
-      return start + value + end;
-    };
+    let replaced = false;
 
-    const get = function (body, path) {
+    for(let compose_file of this.compose_files) {
+      let body = fs.readFileSync(compose_file, 'utf8');
+
       const tokens = new Parser().parse(body);
       const docs = new Composer().compose(tokens);
       let doc = docs.next().value;
 
-      path = path.split(".");
-      let scope = doc.contents, step;
-      diver: while((step = path.shift())) {
-        if(getType(scope) == "YAMLMap") {
-          for(let pair of scope.items) {
-            if(pair.key.value == step) {
-              scope = pair.value;
-              continue diver;
+      if(doc.hasIn(path)) {
+        doc.setIn(path, value);
+        body = doc.toString({...yamlStyle, verifyAliasOrder : false});
 
-            }
-          }
-        }
-        return;
-      }
-      return scope;
-    };
-
-    let replaced = false;
-    for(let compose_file of this.compose_files) {
-      let body = fs.readFileSync(compose_file, 'utf8');
-      if(get(body, path)) {
-        body = set(body, path, value);
         fs.writeFileSync(compose_file, body);
         console.log("Set %s to %s in %s", path, value, compose_file);
         replaced = true;
