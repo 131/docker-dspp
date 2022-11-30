@@ -12,6 +12,7 @@ const jqdive     = require('nyks/object/jqdive');
 const glob       = require('glob').sync;
 
 const walk       = require('nyks/object/walk');
+const ProgressBar = require('progress');
 const mkdirpSync = require('nyks/fs/mkdirpSync');
 const prompt     = require('cnyks/prompt/prompt');
 const md5        = require('nyks/crypto/md5');
@@ -20,7 +21,7 @@ const wait       = require('nyks/child_process/wait');
 
 const {dict}  = require('nyks/process/parseArgs')();
 
-const {stringify, parse, parseAllDocuments,  Parser, Composer} = require('yaml');
+const {stringify, parse, parseDocument,  Parser, Composer} = require('yaml');
 
 function passthru(cmd) {
   let child = spawn(cmd, {shell : '/bin/bash', stdio : 'inherit'});
@@ -86,13 +87,22 @@ class dspp {
       env += fs.readFileSync(header_file, 'utf-8') + `\n`;
 
     let stack = '';
-    for(let compose_file of compose_files || [])
-      stack += env + fs.readFileSync(compose_file, 'utf-8') + `\n---\n`;
-
     let out = {};
+    let progress = new ProgressBar('Computing stack [:bar]', {total : compose_files.length, width : 60, incomplete : ' ', clear : true });
 
+    for(let compose_file of compose_files || []) {
+      let body = env + fs.readFileSync(compose_file, 'utf-8');
+      stack += `${body}\n---\n`;
+      progress.tick();
 
-    parseAllDocuments(stack, {merge : true}).forEach(doc => deepMixIn(out, doc.toJS({maxAliasCount : -1 })));
+      try {
+        let doc = parseDocument(body, {merge : true});
+        deepMixIn(out, doc.toJS({maxAliasCount : -1 }));
+      } catch(err) {
+        console.error("\n", "Parsing failure in", compose_file);
+        throw err;
+      }
+    }
 
     out = sortObjByKey(out);
 
@@ -319,7 +329,7 @@ class dspp {
       let body = fs.readFileSync(compose_file, 'utf8');
 
       const tokens = new Parser().parse(body);
-      const docs = new Composer().compose(tokens);
+      const docs = new Composer({merge : true}).compose(tokens);
       let doc = docs.next().value;
 
       if(doc.hasIn(path)) {
