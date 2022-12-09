@@ -18,10 +18,13 @@ const prompt     = require('cnyks/prompt/prompt');
 const md5        = require('nyks/crypto/md5');
 const tmppath    = require('nyks/fs/tmppath');
 const wait       = require('nyks/child_process/wait');
+const eachLimit = require('nyks/async/eachLimit');
 
 const {dict}  = require('nyks/process/parseArgs')();
 
 const {stringify, parse, parseDocument,  Parser, Composer} = require('yaml');
+
+const DockerSDK = require('@131/docker-sdk');
 
 function passthru(cmd) {
   let child = spawn(cmd, {shell : '/bin/bash', stdio : 'inherit'});
@@ -54,6 +57,7 @@ class dspp {
     }
 
     this.stack_name  = config.name;
+    this.docker_sdk  = new DockerSDK(this.stack_name);
 
     this.header_files = config.header_files || [];
     this.compose_files = config.compose_files || [];
@@ -77,10 +81,7 @@ class dspp {
 
   async _parse() {
 
-    let {filter, stack_name, header_files, compose_files} = this;
-    let stack_file = `${stack_name}.yml`;
-
-
+    let {stack_name, header_files, compose_files} = this;
 
     let env = '';
     for(let header_file of header_files)
@@ -88,7 +89,9 @@ class dspp {
 
     let stack = '';
     let out = {};
-    let progress = new ProgressBar('Computing stack [:bar]', {total : compose_files.length, width : 60, incomplete : ' ', clear : true });
+
+    let total =  compose_files.length;
+    let progress = new ProgressBar('Computing stack [:bar]', {total, width : 60, incomplete : ' ', clear : true });
 
     for(let compose_file of compose_files || []) {
       let body = env + fs.readFileSync(compose_file, 'utf-8');
@@ -116,45 +119,14 @@ class dspp {
     for(let [service_name, service] of Object.entries(out.services || {}))
       out.services[service_name] = walk(service, v =>  replaceEnv(v, {...service, service_name}));
 
-    // strip all filtered services
-    if(filter) {
-      stack_file = `${stack_name}.${filter}.yml`;
 
-      let f_configs  = [];
-      let f_volumes  = [];
-      let f_networks = [];
+    let config_map = {}, configs = Object.entries(out.configs || {});
+    total =  configs.length;
+    progress = new ProgressBar('Computing configs [:bar]', {total, width : 60, incomplete : ' ', clear : true });
 
-      for(let [service_name, service] of Object.entries(out.services)) {
-        if(!service_name.includes(filter)) {
-          delete out.services[service_name];
-          continue;
-        }
-        for(let config of service.configs || [])
-          f_configs.push(config.source);
-        for(let volume of service.volumes || [])
-          f_volumes.push(volume.source);
-        for(let [k, v] of Object.entries(service.networks || {}))
-          f_networks.push(typeof v == "string" ? v : k);
-      }
+    for(let [config_name, config] of configs) {
+      progress.tick();
 
-
-      for(let config_name in out.configs) {
-        if(!f_configs.includes(config_name))
-          delete out.configs[config_name];
-      }
-      for(let volume_name in out.volumes) {
-        if(!f_volumes.includes(volume_name))
-          delete out.volumes[volume_name];
-      }
-
-      for(let network_name in out.networks) {
-        if(!f_networks.includes(network_name))
-          delete out.networks[network_name];
-      }
-    }
-
-    let config_map = {};
-    for(let [config_name, config] of Object.entries(out.configs || {})) {
       if(config.external)
         continue;
       let {cas_path, cas_name, cas_content, trace} = config_map[config_name] = await this._cas(config_name, config);
@@ -174,6 +146,21 @@ class dspp {
       }
     }
 
+    let stack_guid = md5(stack);
+    return {out, stack_guid, cas};
+  }
+
+  async _compute(filter = false) {
+    let {stack_name} = this;
+
+    let stack_file = `${stack_name}.yml`;
+
+    let {out, stack_guid, cas} = await this._parse();
+
+    if(filter) {
+      stack_file = `${stack_name}.${filter}.yml`;
+      out = this._filter(out, filter);
+    }
 
     let body = stringify(flatten({
       version   : out.version,
@@ -184,19 +171,64 @@ class dspp {
       services  : isEmpty(out.services) ? undefined : out.services,
     }), yamlStyle);
 
-    let stack_revision = md5(stack + body).substr(0, 5); //source + compiled
+    let stack_revision = md5(stack_guid + body).substr(0, 5); //source + compiled
 
     let header = `# ${stack_name} @${stack_revision} (dspp v${DSPP_VERSION})\n`;
+
     return {
+      stack_file,
       stack_revision,
       cas,
-      compiled : header + body,
-      stack_file,
+      compiled : header + body
     };
+
+  }
+
+  _filter(out, filter) {
+    let f_configs  = [];
+    let f_volumes  = [];
+    let f_secrets  = [];
+    let f_networks = [];
+
+    for(let [service_name, service] of Object.entries(out.services)) {
+      if(!service_name.includes(filter)) {
+        delete out.services[service_name];
+        continue;
+      }
+      for(let config of service.configs || [])
+        f_configs.push(config.source);
+      for(let secret of service.secrets || [])
+        f_secrets.push(secret.source);
+      for(let volume of service.volumes || [])
+        f_volumes.push(volume.source);
+      for(let [k, v] of Object.entries(service.networks || {}))
+        f_networks.push(typeof v == "string" ? v : k);
+    }
+
+
+    for(let config_name in out.configs) {
+      if(!f_configs.includes(config_name))
+        delete out.configs[config_name];
+    }
+    for(let secret_name in out.secrets) {
+      if(!f_secrets.includes(secret_name))
+        delete out.secrets[secret_name];
+    }
+    for(let volume_name in out.volumes) {
+      if(!f_volumes.includes(volume_name))
+        delete out.volumes[volume_name];
+    }
+
+    for(let network_name in out.networks) {
+      if(!f_networks.includes(network_name))
+        delete out.networks[network_name];
+    }
+
+    return out;
   }
 
   async parse() {
-    let {compiled} = await this._parse();
+    let {compiled} = await this._compute();
     return compiled;
   }
 
@@ -210,7 +242,7 @@ class dspp {
     if(filter)
       console.error("Filter stack for '%s'", filter);
 
-    let {compiled, stack_revision, cas, stack_file} = await this._parse();
+    let {compiled, stack_revision, cas, stack_file} = await this._compute(filter);
     let stack_path = path.join(CACHE_STACK_PATH, stack_file);
 
     let result = {stack_revision};
@@ -231,7 +263,6 @@ class dspp {
 
       return result;
     };
-
 
 
     let before = fs.existsSync(stack_path) ? stack_path : "/dev/null";
@@ -275,7 +306,9 @@ class dspp {
 
   async deploy() {
 
-    let {compiled, stack_file} = await this._parse();
+    let {filter} = this;
+
+    let {compiled, stack_file} = await this._compute(filter);
     let stack_path = path.join(CACHE_STACK_PATH, stack_file);
 
     if(!fs.existsSync(stack_path) || fs.readFileSync(stack_path, 'utf-8') != compiled)
@@ -319,6 +352,18 @@ class dspp {
     return {hash, cas_path, cas_name, cas_content : config_body, trace};
   }
 
+  async version() {
+    return this.docker_sdk.version();
+  }
+
+  async config_prune() {
+    let configs = await this.docker_sdk.configs_list({namespace : this.stack_name});
+    await eachLimit(configs, 5, async ({ID : id, Spec : { Name : name}}) => {
+      let res = await this.docker_sdk.request('DELETE', `/configs/${id}`);
+      console.log("Pruning", id, name, res.statusCode);
+    });
+
+  }
 
   update(path, value) {
     path = path.split(".");
