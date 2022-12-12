@@ -252,8 +252,6 @@ class dspp {
     let {compiled, stack_revision, stack_file} = await this._compute(filter);
     let result = {stack_revision};
 
-    let stack_path = path.join(CACHE_STACK_PATH, stack_file);
-
     console.error("Working in %s", stack_file);
 
     let approve = () => {
@@ -263,10 +261,6 @@ class dspp {
     };
 
     let current = await this.docker_sdk.config_read(stack_file) || "";
-
-    // init from fs
-    if(current === "" && fs.existsSync(stack_path))
-      current = fs.readFileSync(stack_path, 'utf-8');
 
     if(current == compiled || this.approved == compiled) {
       console.error("No changes detected");
@@ -311,20 +305,20 @@ class dspp {
 
     let {filter} = this;
 
-    let {compiled, stack_file, cas} = await this._compute(filter);
+    let {compiled, cas, stack_file} = await this._compute(filter);
     let current = await this.docker_sdk.config_read(stack_file) || "";
 
     if(current != compiled && compiled != this.approved)
       return console.error("Change detected, please compile first");
 
-    let stack_path = path.join(CACHE_STACK_PATH, stack_file);
+    let hash       = md5(compiled);
+    let stack_path = path.join(CACHE_CAS_PATH, hash);
 
     let write = function() {
-      mkdirpSync(CACHE_STACK_PATH);
       mkdirpSync(CACHE_CAS_PATH);
+      console.error("Stack %s wrote in", stack_file, stack_path);
 
-      fs.writeFileSync(stack_path, compiled);
-      console.error("Stack wrote in", stack_path);
+      cas[stack_path] = compiled;
 
       for(let [cas_path, cas_content] of Object.entries(cas)) {
         if(!fs.existsSync(cas_path))
