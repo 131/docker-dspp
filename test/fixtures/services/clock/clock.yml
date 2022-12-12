@@ -11,6 +11,10 @@ services:
 
     image: si/clock:v1.0.1
 
+    configs:
+      - source: clock-config
+        target: /etc/timezone
+
     logging:
       driver: gelf
       options:

@@ -10,11 +10,30 @@
 ```
 dspp production.yml --ir://run=compile
 dspp production.yml --ir://run=deploy
-
-
-
-
 ```
+
+
+
+# Change a global macro
+```
+=> verify all update
+dspp production.yml --ir://run=compile
+=> deploy full stack
+dspp production.yml --ir://run=deploy
+```
+
+
+# Reconfigure a service
+```
+=> verify local update
+dspp production.yml service_name --ir://run=compile
+=> deploy service only
+dspp production.yml service_name  --ir://run=deploy
+```
+
+
+
+
 # Installation instruction
 ```
 

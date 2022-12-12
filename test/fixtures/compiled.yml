@@ -1,4 +1,4 @@
-# dspp-stack @112e0 (dspp v4.2.1)
+# dspp-stack @6b2c1 (dspp v4.2.1)
 version: "3.8"
 configs:
   clock-config-0d169:
@@ -8,6 +8,9 @@ configs:
     file: .docker-stack/.cas/13add6c2c6441f1e9ad39017c7d4f45b
 services:
   clock:
+    configs:
+      - source: clock-config-0d169
+        target: /etc/timezone
     deploy:
       placement:
         constraints:

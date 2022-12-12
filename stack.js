@@ -61,6 +61,9 @@ class dspp {
 
     this.stack_name  = config.name;
     this.docker_sdk  = new DockerSDK(this.stack_name);
+    this.noDeploy    = !!dict['no-deploy'];
+    if(this.noDeploy)
+      console.log("Using --no-deploy to bypass docker stack deployment, make sure to know what you are doing");
 
     this.header_files = config.header_files || [];
     this.compose_files = config.compose_files || [];
@@ -80,10 +83,6 @@ class dspp {
     }
 
     this.filter   = filter;
-    this.labels = {
-      [DOCKER_STACK_NS] : this.stack_name,
-      [DSPP_NS]         : "true",
-    };
   }
 
   async _parse() {
@@ -153,86 +152,131 @@ class dspp {
       }
     }
 
+
     let stack_guid = md5(stack);
-    return {out, stack_guid, cas};
+
+    return {out : {
+      services : {},
+      configs  : {},
+      volumes  : {},
+      secrets  : {},
+      networks : {},
+      ...out
+    }, stack_guid, cas};
+  }
+
+  async _read_remote_state(service_name) {
+    let entry = `${this.stack_name}.dspp.${service_name}.yml`;
+    return (await this.docker_sdk.config_read(entry)) || "";
+  }
+
+  async _write_remote_state(service_name, compiled) {
+    let entry = `${this.stack_name}.dspp.${service_name}.yml`;
+    const labels = {
+      [DOCKER_STACK_NS] : this.stack_name,
+      [DSPP_NS]         : "true",
+    };
+
+    await this.docker_sdk.config_write(entry, compiled, labels);
   }
 
   async _compute(filter = false) {
     let {stack_name} = this;
 
-    let stack_file = `${stack_name}.yml`;
+    let {out : {version, ...input}, stack_guid, cas} = await this._parse();
 
-    let {out, stack_guid, cas} = await this._parse();
+    const write = function(stack) {
+      const body = stringify(flatten({
+        version,
+        configs   : isEmpty(stack.configs)  ? undefined : stack.configs,
+        secrets   : isEmpty(stack.secrets)  ? undefined : stack.secrets,
+        networks  : isEmpty(stack.networks) ? undefined : stack.networks,
+        volumes   : isEmpty(stack.volumes)  ? undefined : stack.volumes,
+        services  : isEmpty(stack.services) ? undefined : stack.services,
+      }), yamlStyle);
 
-    if(filter) {
-      out = this._filter(out, filter);
-      stack_file = `${stack_name}.${filter}.yml`;
-    }
+      const stack_revision = md5(stack_guid + body).substr(0, 5); //source + compiled
+      const header = `# ${stack_name} @${stack_revision} (dspp v${DSPP_VERSION})\n`;
+      const compiled = header + body;
 
-    let body = stringify(flatten({
-      version   : out.version,
-      configs   : isEmpty(out.configs)  ? undefined : out.configs,
-      secrets   : isEmpty(out.secrets)  ? undefined : out.secrets,
-      networks  : isEmpty(out.networks) ? undefined : out.networks,
-      volumes   : isEmpty(out.volumes)  ? undefined : out.volumes,
-      services  : isEmpty(out.services) ? undefined : out.services,
-    }), yamlStyle);
+      const hash       = md5(compiled);
+      const stack_path = path.join(CACHE_CAS_PATH, hash);
+      cas[stack_path] = compiled;
 
-    let stack_revision = md5(stack_guid + body).substr(0, 5); //source + compiled
-
-    let header = `# ${stack_name} @${stack_revision} (dspp v${DSPP_VERSION})\n`;
-
-    return {
-      stack_file,
-      stack_revision,
-      cas,
-      compiled : header + body
+      return {stack_revision, stack_path, compiled};
     };
 
-  }
 
-  _filter(out, filter) {
-    let f_configs  = [];
-    let f_volumes  = [];
-    let f_secrets  = [];
-    let f_networks = [];
+    let services_slices = [];
+    let remote_stack    = {};
+    let stack = {version};
 
-    for(let [service_name, service] of Object.entries(out.services)) {
-      if(!service_name.includes(filter)) {
-        delete out.services[service_name];
+    // reading remote states
+    let services =  Object.entries(input.services || {});
+    let progress = new ProgressBar('Computing services [:bar]', {total : services.length, width : 60, incomplete : ' ', clear : true });
+
+
+    for(let [service_name, service] of services) {
+      progress.tick();
+
+      if(filter && !service_name.includes(filter))
         continue;
+
+      let service_current = await this._read_remote_state(service_name);
+
+      let doc = parseDocument(service_current, {merge : true});
+      deepMixIn(remote_stack, doc.toJS({maxAliasCount : -1 }));
+
+      let stack_slice = {
+        version,
+        services : {},
+        configs  : {},
+        volumes  : {},
+        secrets  : {},
+        networks : {},
+      };
+
+      stack_slice.services[service_name] = service;
+
+      for(let config of service.configs || []) {
+        if(input.configs[config.source])
+          stack_slice.configs[config.source] = input.configs[config.source];
       }
-      for(let config of service.configs || [])
-        f_configs.push(config.source);
-      for(let secret of service.secrets || [])
-        f_secrets.push(secret.source);
-      for(let volume of service.volumes || [])
-        f_volumes.push(volume.source);
-      for(let [k, v] of Object.entries(service.networks || {}))
-        f_networks.push(typeof v == "string" ? v : k);
+
+      for(let secret of service.secrets || []) {
+        if(input.secrets[secret.source])
+          stack_slice.secrets[secret.source] = input.secrets[secret.source];
+      }
+
+      for(let volume of service.volumes || []) {
+        if(input.volumes[volume.source])
+          stack_slice.volumes[volume.source] = input.volumes[volume.source];
+      }
+
+      for(let [k, v] of Object.entries(service.networks || {})) {
+        let source = typeof v == "string" ? v : k;
+        if(input.networks[source]) //should throw instead
+          stack_slice.networks[source] = input.networks[source];
+      }
+
+      stack.services = {...stack.services, ...stack_slice.services};
+      stack.configs  = {...stack.configs, ...stack_slice.configs};
+      stack.networks = {...stack.networks, ...stack_slice.networks};
+      stack.secrets  = {...stack.secrets, ...stack_slice.secrets};
+      stack.volumes  = {...stack.volumes, ...stack_slice.volumes};
+
+      services_slices.push({service_name, ...write(stack_slice)});
     }
 
+    remote_stack = sortObjByKey(remote_stack);
+    stack  = sortObjByKey(stack);
 
-    for(let config_name in out.configs) {
-      if(!f_configs.includes(config_name))
-        delete out.configs[config_name];
-    }
-    for(let secret_name in out.secrets) {
-      if(!f_secrets.includes(secret_name))
-        delete out.secrets[secret_name];
-    }
-    for(let volume_name in out.volumes) {
-      if(!f_volumes.includes(volume_name))
-        delete out.volumes[volume_name];
-    }
+    let {compiled : current}        = write(remote_stack);
+    let {compiled, stack_revision, stack_path} = write(stack);
 
-    for(let network_name in out.networks) {
-      if(!f_networks.includes(network_name))
-        delete out.networks[network_name];
-    }
-
-    return out;
+    return {cas, current, ...{compiled, stack_revision, stack_path}, services_slices};
   }
+
 
   async parse() {
     let {compiled} = await this._compute();
@@ -240,7 +284,7 @@ class dspp {
   }
 
 
-  async compile(commit = false) {
+  async plan(commit = false) {
 
     let {filter, compose_files, header_files, stack_name} = this;
 
@@ -249,18 +293,14 @@ class dspp {
     if(filter)
       console.error("Filter stack for '%s'", filter);
 
-    let {compiled, stack_revision, stack_file} = await this._compute(filter);
+    let {compiled, current, stack_revision} = await this._compute(filter);
     let result = {stack_revision};
-
-    console.error("Working in %s", stack_file);
 
     let approve = () => {
       console.log("Approved");
       this.approved = compiled;
       return result;
     };
-
-    let current = await this.docker_sdk.config_read(stack_file) || "";
 
     if(current == compiled || this.approved == compiled) {
       console.error("No changes detected");
@@ -301,24 +341,21 @@ class dspp {
     return result;
   }
 
-  async deploy() {
+  async apply() {
+
+    if(this.noDeploy)
+      console.log("Using --no-deploy to bypass docker stack deployment, make sure to know what you are doing");
 
     let {filter} = this;
 
-    let {compiled, cas, stack_file} = await this._compute(filter);
-    let current = await this.docker_sdk.config_read(stack_file) || "";
+    let {cas, compiled, current, services_slices, stack_path} = await this._compute(filter);
 
     if(current != compiled && compiled != this.approved)
       return console.error("Change detected, please compile first");
 
-    let hash       = md5(compiled);
-    let stack_path = path.join(CACHE_CAS_PATH, hash);
-
     let write = function() {
       mkdirpSync(CACHE_CAS_PATH);
-      console.error("Stack %s wrote in", stack_file, stack_path);
-
-      cas[stack_path] = compiled;
+      console.error("Stack file wrote in %s (%s)", stack_path, filter ? `filter ${filter}` : "full stack");
 
       for(let [cas_path, cas_content] of Object.entries(cas)) {
         if(!fs.existsSync(cas_path))
@@ -327,8 +364,12 @@ class dspp {
     };
     write();
 
-    await passthru(`docker stack deploy --with-registry-auth --compose-file - ${this.stack_name} < "${stack_path}"`);
-    await this.docker_sdk.config_write(stack_file, compiled, this.labels);
+    if(!this.noDeploy)
+      await passthru(`docker stack deploy --with-registry-auth --compose-file - ${this.stack_name} < "${stack_path}"`);
+
+    for(let {service_name, compiled} of services_slices)
+      await this._write_remote_state(service_name, compiled);
+
     await passthru(`docker service ls`);
   }
 
