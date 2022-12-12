@@ -301,7 +301,7 @@ class dspp {
     let result = {stack_revision};
 
     let approve = () => {
-      console.log("Approved");
+      console.error("Approved");
       this.approved = compiled;
       return result;
     };
@@ -310,13 +310,15 @@ class dspp {
       console.error("No changes detected");
       return result;
     }
-
-    if(commit)
-      return approve();
-
     let before = tmppath(), next = tmppath();
     fs.writeFileSync(before, current);
     fs.writeFileSync(next, compiled);
+
+
+    if(commit) {
+      await passthru(`cat "${next}" | git diff --no-index --color "${before}" - 1>&2 | cat`);
+      return approve();
+    }
 
     let style = 0;
 
