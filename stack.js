@@ -25,6 +25,8 @@ const {dict}  = require('nyks/process/parseArgs')();
 const {stringify, parse, parseDocument,  Parser, Composer} = require('yaml');
 
 const DockerSDK = require('@131/docker-sdk');
+const {escape}  = DockerSDK;
+
 const DOCKER_STACK_NS = 'com.docker.stack.namespace';
 const DSPP_NS         = 'dspp.namespace';
 
@@ -38,6 +40,8 @@ const yamlStyle = {singleQuote : false, lineWidth : 0};
 const CACHE_STACK_PATH = ".docker-stack";
 const CACHE_CAS_PATH   = path.join(CACHE_STACK_PATH, ".cas");
 const flatten = obj => JSON.parse(JSON.stringify(obj));
+
+
 
 class dspp {
 
@@ -166,12 +170,12 @@ class dspp {
   }
 
   async _read_remote_state(service_name) {
-    let entry = `${this.stack_name}.dspp.${service_name}`;
+    let entry = escape(`${this.stack_name}.dspp.${service_name}`);
     return (await this.docker_sdk.config_read(entry)) || "";
   }
 
   async _write_remote_state(service_name, compiled) {
-    let entry = `${this.stack_name}.dspp.${service_name}`;
+    let entry = escape(`${this.stack_name}.dspp.${service_name}`);
     const labels = {
       [DOCKER_STACK_NS] : this.stack_name,
       [DSPP_NS]         : "true",
