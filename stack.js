@@ -166,12 +166,12 @@ class dspp {
   }
 
   async _read_remote_state(service_name) {
-    let entry = `${this.stack_name}.dspp.${service_name}.yml`;
+    let entry = `${this.stack_name}.dspp.${service_name}`;
     return (await this.docker_sdk.config_read(entry)) || "";
   }
 
   async _write_remote_state(service_name, compiled) {
-    let entry = `${this.stack_name}.dspp.${service_name}.yml`;
+    let entry = `${this.stack_name}.dspp.${service_name}`;
     const labels = {
       [DOCKER_STACK_NS] : this.stack_name,
       [DSPP_NS]         : "true",
