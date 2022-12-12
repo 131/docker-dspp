@@ -25,6 +25,9 @@ const {dict}  = require('nyks/process/parseArgs')();
 const {stringify, parse, parseDocument,  Parser, Composer} = require('yaml');
 
 const DockerSDK = require('@131/docker-sdk');
+const DOCKER_STACK_NS = 'com.docker.stack.namespace';
+const DSPP_NS         = 'dspp.namespace';
+
 
 function passthru(cmd) {
   let child = spawn(cmd, {shell : '/bin/bash', stdio : 'inherit'});
@@ -77,6 +80,10 @@ class dspp {
     }
 
     this.filter   = filter;
+    this.labels = {
+      [DOCKER_STACK_NS] : this.stack_name,
+      [DSPP_NS]         : "true",
+    };
   }
 
   async _parse() {
@@ -158,8 +165,8 @@ class dspp {
     let {out, stack_guid, cas} = await this._parse();
 
     if(filter) {
-      stack_file = `${stack_name}.${filter}.yml`;
       out = this._filter(out, filter);
+      stack_file = `${stack_name}.${filter}.yml`;
     }
 
     let body = stringify(flatten({
@@ -242,42 +249,38 @@ class dspp {
     if(filter)
       console.error("Filter stack for '%s'", filter);
 
-    let {compiled, stack_revision, cas, stack_file} = await this._compute(filter);
-    let stack_path = path.join(CACHE_STACK_PATH, stack_file);
-
+    let {compiled, stack_revision, stack_file} = await this._compute(filter);
     let result = {stack_revision};
 
-    console.error("Working in %s", stack_path);
+    let stack_path = path.join(CACHE_STACK_PATH, stack_file);
 
-    let write = function() {
-      mkdirpSync(CACHE_STACK_PATH);
-      mkdirpSync(CACHE_CAS_PATH);
+    console.error("Working in %s", stack_file);
 
-      fs.writeFileSync(stack_path, compiled);
-      console.error("Stack wrote in", stack_path);
-
-      for(let [cas_path, cas_content] of Object.entries(cas)) {
-        if(!fs.existsSync(cas_path))
-          fs.writeFileSync(cas_path, cas_content);
-      }
-
+    let approve = () => {
+      console.log("Approved");
+      this.approved = compiled;
       return result;
     };
 
+    let current = await this.docker_sdk.config_read(stack_file) || "";
 
-    let before = fs.existsSync(stack_path) ? stack_path : "/dev/null";
+    // init from fs
+    if(current === "" && fs.existsSync(stack_path))
+      current = fs.readFileSync(stack_path, 'utf-8');
 
-    if(fs.readFileSync(before, 'utf-8') == compiled) {
+    if(current == compiled || this.approved == compiled) {
       console.error("No changes detected");
       return result;
     }
 
     if(commit)
-      return write();
+      return approve();
+
+    let before = tmppath(), next = tmppath();
+    fs.writeFileSync(before, current);
+    fs.writeFileSync(next, compiled);
 
     let style = 0;
-    let next = tmppath();
-    fs.writeFileSync(next, compiled);
 
     do {
       if(style == 1)
@@ -299,7 +302,7 @@ class dspp {
     } while(true);
 
     if(commit == "y")
-      return write();
+      return approve();
 
     return result;
   }
@@ -308,13 +311,30 @@ class dspp {
 
     let {filter} = this;
 
-    let {compiled, stack_file} = await this._compute(filter);
-    let stack_path = path.join(CACHE_STACK_PATH, stack_file);
+    let {compiled, stack_file, cas} = await this._compute(filter);
+    let current = await this.docker_sdk.config_read(stack_file) || "";
 
-    if(!fs.existsSync(stack_path) || fs.readFileSync(stack_path, 'utf-8') != compiled)
+    if(current != compiled && compiled != this.approved)
       return console.error("Change detected, please compile first");
 
+    let stack_path = path.join(CACHE_STACK_PATH, stack_file);
+
+    let write = function() {
+      mkdirpSync(CACHE_STACK_PATH);
+      mkdirpSync(CACHE_CAS_PATH);
+
+      fs.writeFileSync(stack_path, compiled);
+      console.error("Stack wrote in", stack_path);
+
+      for(let [cas_path, cas_content] of Object.entries(cas)) {
+        if(!fs.existsSync(cas_path))
+          fs.writeFileSync(cas_path, cas_content);
+      }
+    };
+    write();
+
     await passthru(`docker stack deploy --with-registry-auth --compose-file - ${this.stack_name} < "${stack_path}"`);
+    await this.docker_sdk.config_write(stack_file, compiled, this.labels);
     await passthru(`docker service ls`);
   }
 
@@ -358,12 +378,15 @@ class dspp {
 
   async config_prune() {
     let configs = await this.docker_sdk.configs_list({namespace : this.stack_name});
-    await eachLimit(configs, 5, async ({ID : id, Spec : { Name : name}}) => {
+    await eachLimit(configs, 5, async ({ID : id, Spec : { Name : name, Labels}}) => {
+      if(Labels[DSPP_NS])
+        return; //preserve meta dspp entries
       let res = await this.docker_sdk.request('DELETE', `/configs/${id}`);
       console.log("Pruning", id, name, res.statusCode);
     });
 
   }
+
 
   update(path, value) {
     path = path.split(".");
