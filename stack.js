@@ -123,39 +123,55 @@ class dspp {
 
     out = walk(out, v =>  replaceEnv(v, {...out, stack_name}));
 
+
     for(let [task_name, task] of Object.entries(out.tasks || {}))
       out.tasks[task_name]  = walk(task, v =>  replaceEnv(v, {...task, task_name, service_name : task_name}));
 
     for(let [service_name, service] of Object.entries(out.services || {}))
       out.services[service_name] = walk(service, v =>  replaceEnv(v, {...service, service_name}));
 
+    let config_map = {};
+    progress = new ProgressBar('Computing configs [:bar]', {total : Object.keys(out.configs).length, width : 60, incomplete : ' ', clear : true });
 
-    let config_map = {}, configs = Object.entries(out.configs || {});
-    total =  configs.length;
-    progress = new ProgressBar('Computing configs [:bar]', {total, width : 60, incomplete : ' ', clear : true });
+    for(let skip of [
+      // 1st pass : skip serialized
+      config => !!config.format,
+      // 2nd pass : skip processed
+      config => !!config.file,
+    ]) {
 
-    for(let [config_name, config] of configs) {
-      progress.tick();
 
-      if(config.external)
-        continue;
-      let {cas_path, cas_name, cas_content, trace} = config_map[config_name] = await this._cas(config_name, config);
-      cas[cas_path] = cas_content;
+      let configs = Object.entries(out.configs || {});
 
-      let {external, name} = out.configs[config_name];
-      out.configs[cas_name] = {external, name, file : cas_path};
-      if(trace)
-        out.configs[cas_name]['x-trace'] = trace;
-      delete out.configs[config_name];
-    }
+      for(let [config_name, config] of configs) {
+        if(config.external || skip(config))
+          continue;
+        progress.tick();
 
-    for(let service of Object.values(out.services || {})) {
-      for(let config of service.configs || []) {
-        if(config_map[config.source])
-          config.source = config_map[config.source]['cas_name'];
+        let {cas_path, cas_name, cas_content, trace} = config_map[config_name] = await this._cas(config_name, config);
+        cas[cas_path] = cas_content;
+
+        let {external, name} = out.configs[config_name];
+        out.configs[cas_name] = {external, name, file : cas_path};
+        if(trace)
+          out.configs[cas_name]['x-trace'] = trace;
+        delete out.configs[config_name];
+      }
+
+      for(let service of Object.values(out.services || {})) {
+        for(let config of service.configs || []) {
+          if(config_map[config.source])
+            config.source = config_map[config.source]['cas_name'];
+        }
+      }
+
+      for(let task of Object.values(out.tasks || {})) {
+        for(let config of task.configs || []) {
+          if(config_map[config.source])
+            config.source = config_map[config.source]['cas_name'];
+        }
       }
     }
-
 
     let stack_guid = md5(stack);
 
@@ -217,6 +233,7 @@ class dspp {
 
     // reading remote states
     let services =  Object.entries(input.services || {});
+    let tasks    =  Object.entries(input.tasks || {});
     let progress = new ProgressBar('Computing services [:bar]', {total : services.length, width : 60, incomplete : ' ', clear : true });
 
 
@@ -241,11 +258,20 @@ class dspp {
       };
 
       stack_slice.services[service_name] = service;
+      if('x-tasks-config' in service) {
+        for(let [, task] of tasks) {
+          for(let config of task.configs || []) {
+            if(input.configs[config.source])
+              stack_slice.configs[config.source] = input.configs[config.source];
+          }
+        }
+      }
 
       for(let config of service.configs || []) {
         if(input.configs[config.source])
           stack_slice.configs[config.source] = input.configs[config.source];
       }
+
 
       for(let secret of service.secrets || []) {
         if(input.secrets[secret.source])
