@@ -350,7 +350,7 @@ class dspp {
 
     do {
       if(style == 1)
-        await passthru(`diff -y <(echo -e "current stack\\n---"; cat "${before}") <(echo -e "next stack\n---"; cat  "${next}") | colordiff | \${PAGER:-less}`);
+        await passthru(`diff -y <(echo -e "current stack\\n---"; cat "${before}") <(echo -e "next stack\n---"; cat  "${next}") | colordiff | most`);
 
       if(style == 0)
         await passthru(`cat "${next}" | git diff --no-index "${before}" - || true`);
