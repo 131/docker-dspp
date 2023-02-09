@@ -19,4 +19,5 @@ jobs:
           repository: 131hub/dspp
           tag_with_ref: true
           add_git_labels: true
+          tags: latest
 
