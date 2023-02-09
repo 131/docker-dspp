@@ -1,10 +1,10 @@
-name: publish
+name: publish-npm
 on:
   create:
     tags:
       - 'v*'
 jobs:
-  publish:
+  publish-npm:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2

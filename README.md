@@ -6,6 +6,14 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](http://opensource.org/licenses/MIT)
 
 
+# Docker usage example
+
+```
+cd /your/stack/path
+docker run -it --rm  -v .:/app 131hub/dspp production.yml
+```
+
+
 # Usage sample
 ```
 dspp production.yml --ir://run=compile
