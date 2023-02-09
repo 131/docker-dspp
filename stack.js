@@ -131,7 +131,7 @@ class dspp {
       out.services[service_name] = walk(service, v =>  replaceEnv(v, {...service, service_name}));
 
     let config_map = {};
-    progress = new ProgressBar('Computing configs [:bar]', {total : Object.keys(out.configs).length, width : 60, incomplete : ' ', clear : true });
+    progress = new ProgressBar('Computing configs [:bar]', {total : Object.keys(out.configs || {}).length, width : 60, incomplete : ' ', clear : true });
 
     for(let skip of [
       // 1st pass : skip serialized
