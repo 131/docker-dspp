@@ -32,7 +32,7 @@ const DSPP_NS         = 'dspp.namespace';
 
 
 function passthru(cmd) {
-  let child = spawn(cmd, {shell : '/bin/bash', stdio : 'inherit'});
+  let child = spawn(cmd, {shell : true, stdio : 'inherit'});
   return wait(child);
 }
 
