@@ -65,9 +65,11 @@ class dspp {
 
     this.stack_name  = config.name;
     this.docker_sdk  = new DockerSDK(this.stack_name);
+    this.noRemote    = !!dict['no-remote'];
+    this.noProgress  = !!dict['no-progress'];
     this.noDeploy    = !!dict['no-deploy'];
     if(this.noDeploy)
-      console.log("Using --no-deploy to bypass docker stack deployment, make sure to know what you are doing");
+      console.error("Using --no-deploy to bypass docker stack deployment, make sure to know what you are doing");
 
     this.header_files = config.header_files || [];
     this.compose_files = config.compose_files || [];
@@ -101,12 +103,19 @@ class dspp {
     let out = {};
 
     let total =  compose_files.length;
-    let progress = new ProgressBar('Computing stack [:bar]', {total, width : 60, incomplete : ' ', clear : true });
+    let progress = null;
+
+    if(this.noProgress)
+      console.error(`Computing stack`);
+    else
+      progress = new ProgressBar('Computing stack [:bar]', {total, width : 60, incomplete : ' ', clear : true });
 
     for(let compose_file of compose_files || []) {
       let body = env + fs.readFileSync(compose_file, 'utf-8');
       stack += `${body}\n---\n`;
-      progress.tick();
+
+      if(progress)
+        progress.tick();
 
       try {
         let doc = parseDocument(body, {merge : true});
@@ -131,7 +140,11 @@ class dspp {
       out.services[service_name] = walk(service, v =>  replaceEnv(v, {...service, service_name}));
 
     let config_map = {};
-    progress = new ProgressBar('Computing configs [:bar]', {total : Object.keys(out.configs || {}).length, width : 60, incomplete : ' ', clear : true });
+
+    if(this.noProgress)
+      console.error(`Computing ${Object.keys(out.configs || {}).length} configs`);
+    else
+      progress = new ProgressBar('Computing configs [:bar]', {total : Object.keys(out.configs || {}).length, width : 60, incomplete : ' ', clear : true });
 
     for(let skip of [
       // 1st pass : skip serialized
@@ -146,7 +159,9 @@ class dspp {
       for(let [config_name, config] of configs) {
         if(config.external || skip(config))
           continue;
-        progress.tick();
+
+        if(progress)
+          progress.tick();
 
         let {cas_path, cas_name, cas_content, trace} = config_map[config_name] = await this._cas(config_name, config);
         cas[cas_path] = cas_content;
@@ -234,16 +249,24 @@ class dspp {
     // reading remote states
     let services =  Object.entries(input.services || {});
     let tasks    =  Object.entries(input.tasks || {});
-    let progress = new ProgressBar('Computing services [:bar]', {total : services.length, width : 60, incomplete : ' ', clear : true });
+    let progress = null;
+
+    if(this.noProgress)
+      console.error(`Computing ${services.length} services`);
+    else
+      progress = new ProgressBar('Computing services [:bar]', {total : services.length, width : 60, incomplete : ' ', clear : true });
 
 
     for(let [service_name, service] of services) {
-      progress.tick();
+      if(progress)
+        progress.tick();
 
       if(filter && !service_name.includes(filter))
         continue;
 
-      let service_current = await this._read_remote_state(service_name);
+      let service_current = {};
+      if(!this.noRemote)
+        service_current = await this._read_remote_state(service_name);
 
       let doc = parseDocument(service_current, {merge : true});
       deepMixIn(remote_stack, doc.toJS({maxAliasCount : -1 }));
@@ -376,7 +399,7 @@ class dspp {
   async apply() {
 
     if(this.noDeploy)
-      console.log("Using --no-deploy to bypass docker stack deployment, make sure to know what you are doing");
+      console.error("Using --no-deploy to bypass docker stack deployment, make sure to know what you are doing");
 
     let {filter} = this;
 
@@ -449,7 +472,7 @@ class dspp {
       if(Labels[DSPP_NS])
         return; //preserve meta dspp entries
       let res = await this.docker_sdk.request('DELETE', `/configs/${id}`);
-      console.log("Pruning", id, name, res.statusCode);
+      console.error("Pruning", id, name, res.statusCode);
     });
 
   }
@@ -472,7 +495,7 @@ class dspp {
         body = doc.toString({...yamlStyle, verifyAliasOrder : false});
 
         fs.writeFileSync(compose_file, body);
-        console.log("Set %s to %s in %s", path, value, compose_file);
+        console.error("Set %s to %s in %s", path, value, compose_file);
         replaced = true;
       }
     }
