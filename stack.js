@@ -18,6 +18,7 @@ const prompt     = require('cnyks/prompt/prompt');
 const md5        = require('nyks/crypto/md5');
 const tmppath    = require('nyks/fs/tmppath');
 const wait       = require('nyks/child_process/wait');
+const passthru   = require('nyks/child_process/passthru');
 const eachLimit = require('nyks/async/eachLimit');
 
 const {dict}  = require('nyks/process/parseArgs')();
@@ -31,7 +32,7 @@ const DOCKER_STACK_NS = 'com.docker.stack.namespace';
 const DSPP_NS         = 'dspp.namespace';
 
 
-function passthru(cmd) {
+function shellExec(cmd) {
   let child = spawn(cmd, {shell : true, stdio : 'inherit'});
   return wait(child);
 }
@@ -342,7 +343,7 @@ class dspp {
 
 
     if(commit) {
-      await passthru(`cat "${next}" | git diff --no-index --color "${before}" - 1>&2 | cat`);
+      await shellExec(`cat "${next}" | git diff --no-index --color "${before}" - 1>&2 | cat`);
       return approve();
     }
 
@@ -350,10 +351,10 @@ class dspp {
 
     do {
       if(style == 1)
-        await passthru(`diff -y <(echo -e "current stack\\n---"; cat "${before}") <(echo -e "next stack\n---"; cat  "${next}") | colordiff | most`);
+        await shellExec(`diff -y <(echo -e "current stack\\n---"; cat "${before}") <(echo -e "next stack\n---"; cat  "${next}") | colordiff | most`);
 
       if(style == 0)
-        await passthru(`cat "${next}" | git diff --no-index "${before}" - || true`);
+        await shellExec(`cat "${next}" | git diff --no-index "${before}" - || true`);
 
       try {
         commit = await prompt("Confirm [y/N/q] (q : toggle diff style):");
@@ -397,12 +398,12 @@ class dspp {
     write();
 
     if(!this.noDeploy)
-      await passthru(`docker stack deploy --with-registry-auth --compose-file - ${this.stack_name} < "${stack_path}"`);
+      await passthru('docker', ['stack', 'deploy', '--with-registry-auth', '--compose-file', stack_path, this.stack_name]);
 
     for(let {service_name, compiled} of services_slices)
       await this._write_remote_state(service_name, compiled);
 
-    await passthru(`docker service ls`);
+    await passthru('docker', ['service', 'ls']);
   }
 
   // import
