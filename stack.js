@@ -18,6 +18,7 @@ const prompt     = require('cnyks/prompt/prompt');
 const md5        = require('nyks/crypto/md5');
 const tmppath    = require('nyks/fs/tmppath');
 const wait       = require('nyks/child_process/wait');
+const pipe       = require('nyks/stream/pipe');
 const passthru   = require('nyks/child_process/passthru');
 const eachLimit = require('nyks/async/eachLimit');
 
@@ -350,8 +351,9 @@ class dspp {
     let style = 0;
 
     do {
+
       if(process.platform == "win32") {
-        await passthru('fc', [before, next]);
+        await passthru('fc', [before, next]).catch(() => false);
       } else {
         if(style == 1)
           await shellExec(`diff -y <(echo -e "current stack\\n---"; cat "${before}") <(echo -e "next stack\n---"; cat  "${next}") | colordiff | most`);
@@ -401,9 +403,13 @@ class dspp {
     };
     write();
 
-    if(!this.noDeploy)
-      await passthru('docker', ['stack', 'deploy', '--with-registry-auth', '--compose-file', stack_path, this.stack_name]);
+    if(!this.noDeploy) {
+      let child = spawn('docker', ['stack', 'deploy', '--with-registry-auth', '--compose-file', '-', this.stack_name], {stdio : ['pipe', 'inherit', 'inherit']});
+      let stack = fs.createReadStream(stack_path);
 
+      await pipe(stack, child.stdin);
+      await wait(child);
+    }
     for(let {service_name, compiled} of services_slices)
       await this._write_remote_state(service_name, compiled);
 
