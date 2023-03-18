@@ -39,7 +39,7 @@ function shellExec(cmd) {
 
 const yamlStyle = {singleQuote : false, lineWidth : 0};
 const CACHE_STACK_PATH = ".docker-stack";
-const CACHE_CAS_PATH   = path.join(CACHE_STACK_PATH, ".cas");
+const CACHE_CAS_PATH   = path.posix.join(CACHE_STACK_PATH, ".cas");
 const flatten = obj => JSON.parse(JSON.stringify(obj));
 
 
@@ -221,7 +221,7 @@ class dspp {
       const compiled = header + body;
 
       const hash       = md5(compiled);
-      const stack_path = path.join(CACHE_CAS_PATH, hash);
+      const stack_path = path.posix.join(CACHE_CAS_PATH, hash);
       cas[stack_path] = compiled;
 
       return {stack_revision, stack_path, compiled};
@@ -337,7 +337,7 @@ class dspp {
       console.error("No changes detected");
       return result;
     }
-    let before = tmppath(), next = tmppath();
+    let before = tmppath("current"), next = tmppath("next");
     fs.writeFileSync(before, current);
     fs.writeFileSync(next, compiled);
 
@@ -350,11 +350,15 @@ class dspp {
     let style = 0;
 
     do {
-      if(style == 1)
-        await shellExec(`diff -y <(echo -e "current stack\\n---"; cat "${before}") <(echo -e "next stack\n---"; cat  "${next}") | colordiff | most`);
+      if(process.platform == "win32") {
+        await passthru('fc', [before, next]);
+      } else {
+        if(style == 1)
+          await shellExec(`diff -y <(echo -e "current stack\\n---"; cat "${before}") <(echo -e "next stack\n---"; cat  "${next}") | colordiff | most`);
 
-      if(style == 0)
-        await shellExec(`cat "${next}" | git diff --no-index "${before}" - || true`);
+        if(style == 0)
+          await shellExec(`cat "${next}" | git diff --no-index "${before}" - || true`);
+      }
 
       try {
         commit = await prompt("Confirm [y/N/q] (q : toggle diff style):");
@@ -434,7 +438,7 @@ class dspp {
 
 
     let hash     = md5(config_body);
-    let cas_path = path.join(CACHE_CAS_PATH, hash);
+    let cas_path = path.posix.join(CACHE_CAS_PATH, hash);
     let cas_name = config_name + '-' + hash.substr(0, 5);
 
     return {hash, cas_path, cas_name, cas_content : config_body, trace};
