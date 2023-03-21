@@ -69,7 +69,7 @@ class dspp {
     this.docker_sdk  = new DockerSDK(this.stack_name);
     this.noDeploy    = !!dict['no-deploy'];
     if(this.noDeploy)
-      console.log("Using --no-deploy to bypass docker stack deployment, make sure to know what you are doing");
+      console.error("Using --no-deploy to bypass docker stack deployment, make sure to know what you are doing");
 
     this.header_files = config.header_files || [];
     this.compose_files = config.compose_files || [];
@@ -383,7 +383,7 @@ class dspp {
   async apply() {
 
     if(this.noDeploy)
-      console.log("Using --no-deploy to bypass docker stack deployment, make sure to know what you are doing");
+      console.error("Using --no-deploy to bypass docker stack deployment, make sure to know what you are doing");
 
     let {filter} = this;
 
@@ -460,7 +460,7 @@ class dspp {
       if(Labels[DSPP_NS])
         return; //preserve meta dspp entries
       let res = await this.docker_sdk.request('DELETE', `/configs/${id}`);
-      console.log("Pruning", id, name, res.statusCode);
+      console.error("Pruning", id, name, res.statusCode);
     });
 
   }
@@ -483,7 +483,7 @@ class dspp {
         body = doc.toString({...yamlStyle, verifyAliasOrder : false});
 
         fs.writeFileSync(compose_file, body);
-        console.log("Set %s to %s in %s", path, value, compose_file);
+        console.error("Set %s to %s in %s", path, value, compose_file);
         replaced = true;
       }
     }
