@@ -67,9 +67,6 @@ class dspp {
 
     this.stack_name  = config.name;
     this.docker_sdk  = new DockerSDK(this.stack_name);
-    this.noDeploy    = !!dict['no-deploy'];
-    if(this.noDeploy)
-      console.log("Using --no-deploy to bypass docker stack deployment, make sure to know what you are doing");
 
     this.header_files = config.header_files || [];
     this.compose_files = config.compose_files || [];
@@ -382,9 +379,6 @@ class dspp {
 
   async apply() {
 
-    if(this.noDeploy)
-      console.log("Using --no-deploy to bypass docker stack deployment, make sure to know what you are doing");
-
     let {filter} = this;
 
     let {cas, compiled, current, services_slices, stack_path} = await this._compute(filter);
@@ -403,13 +397,12 @@ class dspp {
     };
     write();
 
-    if(!this.noDeploy) {
-      let child = spawn('docker', ['stack', 'deploy', '--with-registry-auth', '--compose-file', '-', this.stack_name], {stdio : ['pipe', 'inherit', 'inherit']});
-      let stack = fs.createReadStream(stack_path);
+    let child = spawn('docker', ['stack', 'deploy', '--with-registry-auth', '--compose-file', '-', this.stack_name], {stdio : ['pipe', 'inherit', 'inherit']});
+    let stack = fs.createReadStream(stack_path);
 
-      await pipe(stack, child.stdin);
-      await wait(child);
-    }
+    await pipe(stack, child.stdin);
+    await wait(child);
+
     for(let {service_name, compiled} of services_slices)
       await this._write_remote_state(service_name, compiled);
 
