@@ -6,6 +6,7 @@ const {version : DSPP_VERSION } = require('./package.json');
 const fs    = require('fs');
 const path  = require('path');
 const spawn = require('child_process').spawn;
+const {PassThrough} = require('stream');
 
 const deepMixIn  = require('mout/object/deepMixIn');
 const jqdive     = require('nyks/object/jqdive');
@@ -67,6 +68,7 @@ class dspp {
 
     this.stack_name  = config.name;
     this.docker_sdk  = new DockerSDK(this.stack_name);
+    this.noProgress  = !!dict['no-progress'];
 
     this.header_files = config.header_files || [];
     this.compose_files = config.compose_files || [];
@@ -100,7 +102,9 @@ class dspp {
     let out = {};
 
     let total =  compose_files.length;
-    let progress = new ProgressBar('Computing stack [:bar]', {total, width : 60, incomplete : ' ', clear : true });
+
+    let progressOpts = {total, width : 60, incomplete : ' ', clear : true , stream : this.noProgress ? new PassThrough() : process.stderr};
+    let progress = new ProgressBar('Computing stack [:bar]', progressOpts);
 
     for(let compose_file of compose_files || []) {
       let body = env + fs.readFileSync(compose_file, 'utf-8');
@@ -130,7 +134,11 @@ class dspp {
       out.services[service_name] = walk(service, v =>  replaceEnv(v, {...service, service_name}));
 
     let config_map = {};
-    progress = new ProgressBar('Computing configs [:bar]', {total : Object.keys(out.configs || {}).length, width : 60, incomplete : ' ', clear : true });
+    progress = new ProgressBar('Computing configs [:bar]', progressOpts);
+
+    if(this.noProgress)
+      console.error(`Computing ${Object.keys(out.configs || {}).length} configs`);
+
 
     for(let skip of [
       // 1st pass : skip serialized
@@ -199,7 +207,7 @@ class dspp {
     await this.docker_sdk.config_write(entry, compiled, labels);
   }
 
-  async _compute(filter = false) {
+  async _compute(filter = false, blind = false) {
     let {stack_name} = this;
 
     let {out : {version, ...input}, stack_guid, cas} = await this._parse();
@@ -233,7 +241,11 @@ class dspp {
     // reading remote states
     let services =  Object.entries(input.services || {});
     let tasks    =  Object.entries(input.tasks || {});
-    let progress = new ProgressBar('Computing services [:bar]', {total : services.length, width : 60, incomplete : ' ', clear : true });
+    let progressOpts = {total, width : 60, incomplete : ' ', clear : true , stream : this.noProgress ? new PassThrough() : process.stderr};
+    let progress = new ProgressBar('Computing services [:bar]', progressOpts);
+
+    if(this.noProgress)
+      console.error(`Computing ${services.length} services`);
 
 
     for(let [service_name, service] of services) {
@@ -242,7 +254,9 @@ class dspp {
       if(filter && !service_name.includes(filter))
         continue;
 
-      let service_current = await this._read_remote_state(service_name);
+      let service_current = {};
+      if(!blind)
+        service_current = await this._read_remote_state(service_name);
 
       let doc = parseDocument(service_current, {merge : true});
       deepMixIn(remote_stack, doc.toJS({maxAliasCount : -1 }));
@@ -308,7 +322,7 @@ class dspp {
 
 
   async parse() {
-    let {compiled} = await this._compute();
+    let {compiled} = await this._compute(false, true);
     return compiled;
   }
 
@@ -459,7 +473,7 @@ class dspp {
       if(Labels[DSPP_NS])
         return; //preserve meta dspp entries
       let res = await this.docker_sdk.request('DELETE', `/configs/${id}`);
-      console.log("Pruning", id, name, res.statusCode);
+      console.error("Pruning", id, name, res.statusCode);
     });
 
   }
@@ -482,7 +496,7 @@ class dspp {
         body = doc.toString({...yamlStyle, verifyAliasOrder : false});
 
         fs.writeFileSync(compose_file, body);
-        console.log("Set %s to %s in %s", path, value, compose_file);
+        console.error("Set %s to %s in %s", path, value, compose_file);
         replaced = true;
       }
     }
