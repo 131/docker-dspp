@@ -1,6 +1,6 @@
 {
   "name": "dspp",
-  "version": "5.3.8",
+  "version": "5.4.0",
   "bin": {
     "dspp": "./stack.js"
   },
