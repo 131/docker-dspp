@@ -101,9 +101,8 @@ class dspp {
     let stack = '';
     let out = {};
 
-    let total =  compose_files.length;
-
-    let progressOpts = {total, width : 60, incomplete : ' ', clear : true , stream : this.noProgress ? new PassThrough() : process.stderr};
+    let progressOpts = {width : 60, incomplete : ' ', clear : true, stream : this.noProgress ? new PassThrough() : process.stderr};
+    progressOpts.total = compose_files.length;
     let progress = new ProgressBar('Computing stack [:bar]', progressOpts);
 
     for(let compose_file of compose_files || []) {
@@ -134,6 +133,7 @@ class dspp {
       out.services[service_name] = walk(service, v =>  replaceEnv(v, {...service, service_name}));
 
     let config_map = {};
+    progressOpts.total = Object.keys(out.configs || {}).length;
     progress = new ProgressBar('Computing configs [:bar]', progressOpts);
 
     if(this.noProgress)
@@ -241,7 +241,8 @@ class dspp {
     // reading remote states
     let services =  Object.entries(input.services || {});
     let tasks    =  Object.entries(input.tasks || {});
-    let progressOpts = {total, width : 60, incomplete : ' ', clear : true , stream : this.noProgress ? new PassThrough() : process.stderr};
+    let progressOpts = {width : 60, incomplete : ' ', clear : true, stream : this.noProgress ? new PassThrough() : process.stderr};
+    progressOpts.total = services.length;
     let progress = new ProgressBar('Computing services [:bar]', progressOpts);
 
     if(this.noProgress)
