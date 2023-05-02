@@ -68,7 +68,9 @@ class dspp {
 
     this.stack_name  = config.name;
     this.docker_sdk  = new DockerSDK(this.stack_name);
-    this.noProgress  = !!dict['no-progress'];
+
+    let noProgress  = !!dict['no-progress'];
+    this.progressOpts = {width : 60, incomplete : ' ', clear : true,  stream : noProgress ? new PassThrough() : process.stderr };
 
     this.header_files = config.header_files || [];
     this.compose_files = config.compose_files || [];
@@ -101,10 +103,7 @@ class dspp {
     let stack = '';
     let out = {};
 
-    let total =  compose_files.length;
-
-    let progressOpts = {total, width : 60, incomplete : ' ', clear : true , stream : this.noProgress ? new PassThrough() : process.stderr};
-    let progress = new ProgressBar('Computing stack [:bar]', progressOpts);
+    let progress = new ProgressBar('Computing stack files [:bar]', {...this.progressOpts, total : compose_files.length});
 
     for(let compose_file of compose_files || []) {
       let body = env + fs.readFileSync(compose_file, 'utf-8');
@@ -134,11 +133,7 @@ class dspp {
       out.services[service_name] = walk(service, v =>  replaceEnv(v, {...service, service_name}));
 
     let config_map = {};
-    progress = new ProgressBar('Computing configs [:bar]', progressOpts);
-
-    if(this.noProgress)
-      console.error(`Computing ${Object.keys(out.configs || {}).length} configs`);
-
+    progress = new ProgressBar('Computing (:total) configs [:bar]', {...this.progressOpts, total : Object.keys(out.configs || {}).length});
 
     for(let skip of [
       // 1st pass : skip serialized
@@ -241,12 +236,7 @@ class dspp {
     // reading remote states
     let services =  Object.entries(input.services || {});
     let tasks    =  Object.entries(input.tasks || {});
-    let progressOpts = {total, width : 60, incomplete : ' ', clear : true , stream : this.noProgress ? new PassThrough() : process.stderr};
-    let progress = new ProgressBar('Computing services [:bar]', progressOpts);
-
-    if(this.noProgress)
-      console.error(`Computing ${services.length} services`);
-
+    let progress = new ProgressBar('Computing (:total) services [:bar]', {...this.progressOpts, total : services.length});
 
     for(let [service_name, service] of services) {
       progress.tick();
