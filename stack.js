@@ -322,8 +322,14 @@ class dspp {
     if(filter)
       console.error("Filter stack for '%s'", filter);
 
-    let {compiled, current, stack_revision} = await this._compute(filter);
+    let {compiled, current, stack_revision, services_slices} = await this._compute(filter);
     let result = {stack_revision};
+
+    if(filter) {
+      console.error(`Found ${services_slices.length} matching services`);
+      if(!services_slices.length)
+        return result;
+    }
 
     let approve = () => {
       console.error("Approved");
@@ -360,7 +366,7 @@ class dspp {
       }
 
       try {
-        commit = await prompt("Confirm [y/N/q] (q : toggle diff style):");
+        commit = await prompt("Confirm [y/N/q] (q : toggle diff style): ");
       } catch(err) {
         break;
       }
