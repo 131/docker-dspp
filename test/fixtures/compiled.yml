@@ -1,11 +1,15 @@
-# dspp-stack @6b2c1 (dspp v4.2.1)
-version: "3.8"
+# dspp-stack @cc1b2 (dspp v4.2.1)
+version: "3"
 configs:
   clock-config-0d169:
     file: .docker-stack/.cas/0d169a03c84efedb0cdb5380677e129e
     x-trace: America/Dallas
   keepalived-rproxy-config-13add:
     file: .docker-stack/.cas/13add6c2c6441f1e9ad39017c7d4f45b
+  nginx-conf-b7ace:
+    file: .docker-stack/.cas/b7ace5f2ebb4bfc16ed455815da4c82a
+    x-trace: |
+      # this is nginx conf
 services:
   clock:
     configs:
@@ -46,6 +50,9 @@ services:
     networks:
       - host
   rproxy-local:
+    configs:
+      - source: nginx-conf-b7ace
+        target: /etc/nginx/nginx.conf
     deploy:
       labels:
         - prometheus-job=rproxy-local

@@ -14,7 +14,6 @@ const glob       = require('glob').sync;
 
 const walk       = require('nyks/object/walk');
 const ProgressBar = require('progress');
-const mkdirpSync = require('nyks/fs/mkdirpSync');
 const prompt     = require('cnyks/prompt/prompt');
 const md5        = require('nyks/crypto/md5');
 const tmppath    = require('nyks/fs/tmppath');
@@ -29,6 +28,8 @@ const {stringify, parse, parseDocument,  Parser, Composer} = require('yaml');
 
 const DockerSDK = require('@131/docker-sdk');
 const {escape}  = DockerSDK;
+
+const Cas       = require('./cas');
 
 const DOCKER_STACK_NS = 'com.docker.stack.namespace';
 const DSPP_NS         = 'dspp.namespace';
@@ -94,6 +95,7 @@ class dspp {
 
   async _parse() {
 
+    let cas = new Cas(CACHE_CAS_PATH);
     let {stack_name, header_files, compose_files} = this;
 
     let env = '';
@@ -112,7 +114,10 @@ class dspp {
 
       try {
         let doc = parseDocument(body, {merge : true});
-        deepMixIn(out, doc.toJS({maxAliasCount : -1 }));
+        doc = doc.toJS({maxAliasCount : -1 });
+        for(let [, config] of Object.entries(doc.configs || {}))
+          config['x-source-file'] = compose_file;
+        deepMixIn(out, doc);
       } catch(err) {
         console.error("\n", "Parsing failure in", compose_file);
         throw err;
@@ -121,10 +126,7 @@ class dspp {
 
     out = sortObjByKey(out);
 
-    let cas = {};
-
     out = walk(out, v =>  replaceEnv(v, {...out, stack_name}));
-
 
     for(let [task_name, task] of Object.entries(out.tasks || {}))
       out.tasks[task_name]  = walk(task, v =>  replaceEnv(v, {...task, task_name, service_name : task_name}));
@@ -142,7 +144,6 @@ class dspp {
       config => !!config.file,
     ]) {
 
-
       let configs = Object.entries(out.configs || {});
 
       for(let [config_name, config] of configs) {
@@ -150,30 +151,28 @@ class dspp {
           continue;
         progress.tick();
 
-        let {cas_path, cas_name, cas_content, trace} = config_map[config_name] = await this._cas(config_name, config);
-        cas[cas_path] = cas_content;
-
-        let {external, name} = out.configs[config_name];
-        out.configs[cas_name] = {external, name, file : cas_path};
+        let {cas_path, cas_name, trace} = config_map[config_name] = await cas.config(config_name, config, config['stack_source']);
+        out.configs[cas_name] = {name : config.name, file : cas_path};
         if(trace)
           out.configs[cas_name]['x-trace'] = trace;
         delete out.configs[config_name];
       }
+    }
 
-      for(let service of Object.values(out.services || {})) {
-        for(let config of service.configs || []) {
-          if(config_map[config.source])
-            config.source = config_map[config.source]['cas_name'];
-        }
-      }
-
-      for(let task of Object.values(out.tasks || {})) {
-        for(let config of task.configs || []) {
-          if(config_map[config.source])
-            config.source = config_map[config.source]['cas_name'];
-        }
+    for(let service of Object.values(out.services || {})) {
+      for(let config of service.configs || []) {
+        if(config_map[config.source])
+          config.source = config_map[config.source]['cas_name'];
       }
     }
+
+    for(let task of Object.values(out.tasks || {})) {
+      for(let config of task.configs || []) {
+        if(config_map[config.source])
+          config.source = config_map[config.source]['cas_name'];
+      }
+    }
+
 
     let stack_guid = md5(stack);
 
@@ -202,35 +201,33 @@ class dspp {
     await this.docker_sdk.config_write(entry, compiled, labels);
   }
 
-  async _compute(filter = false, blind = false) {
+
+  _format(stack) {
+    stack  = sortObjByKey(stack);
     let {stack_name} = this;
 
-    let {out : {version, ...input}, stack_guid, cas} = await this._parse();
+    const body = stringify(flatten({
+      version   : "3",
+      configs   : isEmpty(stack.configs)  ? undefined : stack.configs,
+      secrets   : isEmpty(stack.secrets)  ? undefined : stack.secrets,
+      networks  : isEmpty(stack.networks) ? undefined : stack.networks,
+      volumes   : isEmpty(stack.volumes)  ? undefined : stack.volumes,
+      services  : isEmpty(stack.services) ? undefined : stack.services,
+    }), yamlStyle);
 
-    const write = function(stack) {
-      const body = stringify(flatten({
-        version,
-        configs   : isEmpty(stack.configs)  ? undefined : stack.configs,
-        secrets   : isEmpty(stack.secrets)  ? undefined : stack.secrets,
-        networks  : isEmpty(stack.networks) ? undefined : stack.networks,
-        volumes   : isEmpty(stack.volumes)  ? undefined : stack.volumes,
-        services  : isEmpty(stack.services) ? undefined : stack.services,
-      }), yamlStyle);
+    const stack_revision = md5(DSPP_VERSION + body).substr(0, 5); //source + compiled
+    const header = `# ${stack_name} @${stack_revision} (dspp v${DSPP_VERSION})\n`;
+    const compiled = header + body;
 
-      const stack_revision = md5(stack_guid + body).substr(0, 5); //source + compiled
-      const header = `# ${stack_name} @${stack_revision} (dspp v${DSPP_VERSION})\n`;
-      const compiled = header + body;
 
-      const hash       = md5(compiled);
-      const stack_path = path.posix.join(CACHE_CAS_PATH, hash);
-      cas[stack_path] = compiled;
+    return {stack_revision, compiled};
+  }
 
-      return {stack_revision, stack_path, compiled};
-    };
+  async _analyze_local(filter = false) {
 
+    let {out : {version, ...input}, cas} = await this._parse();
 
     let services_slices = [];
-    let remote_stack    = {};
     let stack = {version};
 
     // reading remote states
@@ -243,13 +240,6 @@ class dspp {
 
       if(filter && !service_name.includes(filter))
         continue;
-
-      let service_current = {};
-      if(!blind)
-        service_current = await this._read_remote_state(service_name);
-
-      let doc = parseDocument(service_current, {merge : true});
-      deepMixIn(remote_stack, doc.toJS({maxAliasCount : -1 }));
 
       let stack_slice = {
         version,
@@ -275,7 +265,6 @@ class dspp {
           stack_slice.configs[config.source] = input.configs[config.source];
       }
 
-
       for(let secret of service.secrets || []) {
         if(input.secrets[secret.source])
           stack_slice.secrets[secret.source] = input.secrets[secret.source];
@@ -298,21 +287,34 @@ class dspp {
       stack.secrets  = {...stack.secrets, ...stack_slice.secrets};
       stack.volumes  = {...stack.volumes, ...stack_slice.volumes};
 
-      services_slices.push({service_name, ...write(stack_slice)});
+      services_slices.push({service_name, ...this._format(stack_slice)});
     }
 
-    remote_stack = sortObjByKey(remote_stack);
-    stack  = sortObjByKey(stack);
+    let {compiled, stack_revision} = this._format(stack);
 
-    let {compiled : current}        = write(remote_stack);
-    let {compiled, stack_revision, stack_path} = write(stack);
-
-    return {cas, current, ...{compiled, stack_revision, stack_path}, services_slices};
+    return {cas, compiled, stack_revision, services_slices};
   }
 
 
+  //parse local stack, and fetch remote stack status
+  async _analyze(filter) {
+    let tmp = await this._analyze_local(filter);
+
+    let remote_stack    = {};
+
+    for(let [service_name] of tmp.services_slices) {
+      let service_current = await this._read_remote_state(service_name);
+      let doc = parseDocument(service_current, {merge : true});
+      deepMixIn(remote_stack, doc.toJS({maxAliasCount : -1 }));
+    }
+
+    let {compiled : current}    = this._format(remote_stack);
+    return {...tmp, current};
+  }
+
+  //public helper
   async parse() {
-    let {compiled} = await this._compute(false, true);
+    let {compiled} = await this._analyze_local();
     return compiled;
   }
 
@@ -326,7 +328,7 @@ class dspp {
     if(filter)
       console.error("Filter stack for '%s'", filter);
 
-    let {compiled, current, stack_revision, services_slices} = await this._compute(filter);
+    let {compiled, current, stack_revision, services_slices} = await this._analyze(filter);
     let result = {stack_revision};
 
     if(filter) {
@@ -391,24 +393,18 @@ class dspp {
 
     let {filter} = this;
 
-    let {cas, compiled, current, services_slices, stack_path} = await this._compute(filter);
+    let {cas, compiled, current, services_slices} = await this._analyze(filter);
 
     if(current != compiled && compiled != this.approved)
       return console.error("Change detected, please compile first");
 
-    let write = function() {
-      mkdirpSync(CACHE_CAS_PATH);
-      console.error("Stack file wrote in %s (%s)", stack_path, filter ? `filter ${filter}` : "full stack");
+    let {cas_path : stack_path} = cas.feed(compiled);
+    console.error("Stack file wrote in %s (%s)", stack_path, filter ? `filter ${filter}` : "full stack");
+    cas.write();
 
-      for(let [cas_path, cas_content] of Object.entries(cas)) {
-        if(!fs.existsSync(cas_path))
-          fs.writeFileSync(cas_path, cas_content);
-      }
-    };
-    write();
 
-    let child = spawn('docker', ['stack', 'deploy', '--with-registry-auth', '--compose-file', '-', this.stack_name], {stdio : ['pipe', 'inherit', 'inherit']});
     let stack = fs.createReadStream(stack_path);
+    let child = spawn('docker', ['stack', 'deploy', '--with-registry-auth', '--compose-file', '-', this.stack_name], {stdio : ['pipe', 'inherit', 'inherit']});
 
     await pipe(stack, child.stdin);
     await wait(child);
@@ -419,39 +415,7 @@ class dspp {
     await passthru('docker', ['service', 'ls']);
   }
 
-  // import
-  async _cas(config_name, config) {
-    let config_body;
-    let {file, contents, format, 'x-trace' : trace = true} = config;
 
-    if(file) {
-      config_body = fs.readFileSync(file, 'utf-8');
-      if(trace)
-        trace = config_body;
-    }
-
-    if(contents) {
-      if(format == "json")
-        config_body = JSON.stringify(contents, null, 2);
-      else if(format == "yaml")
-        config_body = stringify(contents, yamlStyle);
-      else
-        config_body = String(contents);
-
-      if(trace)
-        trace = contents;
-    }
-
-    if(config_body == undefined)
-      throw `No body for config '${config_name}'`;
-
-
-    let hash     = md5(config_body);
-    let cas_path = path.posix.join(CACHE_CAS_PATH, hash);
-    let cas_name = config_name + '-' + hash.substr(0, 5);
-
-    return {hash, cas_path, cas_name, cas_content : config_body, trace};
-  }
 
   async version() {
     return this.docker_sdk.version();

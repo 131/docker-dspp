@@ -1,5 +1,10 @@
 version: "3.8"
 
+configs:
+  nginx-conf:
+    file: ./nginx.conf
+
+
 services:
   rproxy-local:
     image: infra/rproxy:v1.1.8
@@ -24,6 +29,10 @@ services:
         target: 1445
         protocol: tcp
         mode: host
+
+    configs:
+      - source: nginx-conf
+        target: /etc/nginx/nginx.conf
 
     networks:
       - default
