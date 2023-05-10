@@ -1,7 +1,24 @@
-x-env:
-  - &STACK_NS STACK_NS=production
+x-envs:
+  - &env-stack
+    STACK_NAME: $${stack_name}
+    IMAGE_TAG: $${image}
+
+  - &env-debug
+    DEBUG: "*,-express:*,-send,-body-parser:*"
+    DEBUG_FORMAT: :namespace :body
+    DEBUG_INSPECT_BREAKLENGTH: 0
+
+  - &env-dns
+    dns: 8.8.8.8
+
 
 x-deploys:
+  - &deploy-m1
+    replicas: 1
+    placement:
+      constraints:
+        - node.role == manager
+
   - &deploy-bg1
     replicas: 1
     placement:
@@ -13,3 +30,11 @@ x-deploys:
     placement:
       constraints:
         - engine.labels.background-cluster == true
+
+x-loggers:
+  - &logger-default
+    driver: gelf
+    options:
+      gelf-address: "udp://gra2.logs.ovh.com:2202"
+      env: X-OVH-TOKEN
+      tag: $${service_name}

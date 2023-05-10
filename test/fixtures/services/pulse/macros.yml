@@ -1,0 +1,15 @@
+x-task:
+  - &env-logging-pulse
+    X-OVH-TOKEN: abcd
+
+  - &task-default
+    <<: *env-dns
+
+    deploy: *deploy-bg1
+    logging: *logger-default
+    networks:
+      - default
+
+    environment:
+      <<: *env-logging-pulse
+

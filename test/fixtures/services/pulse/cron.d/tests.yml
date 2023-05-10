@@ -1,0 +1,20 @@
+version: "3.8"
+
+tasks:
+  trigger/nopethrow:
+
+    <<: *task-default
+    plan: false
+    image: debian:bullseye
+    entrypoint: /bin/sh
+    command: -c "exit 1"
+
+
+
+  test/sleep_1h:
+    <<: *task-default
+
+    plan: false
+    image: debian:bullseye
+    entrypoint: /bin/bash
+    command: -c "sleep 1h"

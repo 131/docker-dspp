@@ -1,0 +1,49 @@
+version: "3.8"
+
+configs:
+  pulse-config:
+    file: ./config.js
+  pulse-jobs:
+    contents: $${tasks}
+    format: json
+
+services:
+
+  pulse:
+    <<: *env-dns
+
+    image: domyks/si/pulse:v3.4.8
+    user: root
+    x-tasks-config: true
+
+    configs:
+      - source: pulse-config
+        target: /app/config/config.json.js
+      - source: pulse-jobs
+        target: /app/config/jobs.json
+
+    #    entrypoint: bash -c 'sleep infinity'
+
+    environment:
+      <<: *env-stack
+      <<: *env-debug
+      DEBUG: "*,-express:*,-send,-xml-parser"
+      PULSE_CONFIG_PATH: /app/config/config.json.js
+      PULSE_JOBS_PATH: /app/config/jobs.json
+
+    networks:
+      - default
+
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+
+    logging: *logger-default
+
+    deploy:
+      <<: *deploy-m1
+      labels:
+        - prometheus-job=pulse
+        - prometheus-port=8081
+        - prometheus-path=/metrics

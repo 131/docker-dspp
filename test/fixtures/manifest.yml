@@ -8,4 +8,8 @@ files:
   - services/rproxy/rproxy.yml
   - services/keepalived/keepalived.yml
 
+  - services/pulse/pulse.yml
+  - type: header
+    path: services/pulse/macros.yml
 
+  - services/pulse/cron.d/**/*.yml

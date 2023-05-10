@@ -15,16 +15,7 @@ services:
       - source: clock-config
         target: /etc/timezone
 
-    logging:
-      driver: gelf
-      options:
-        gelf-address: "udp://gra2.logs.ovh.com:2202"
-        env: X-OVH-TOKEN
-        tag: clock
+    logging: *logger-default
 
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.role == manager
+    deploy: *deploy-m1
 

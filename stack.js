@@ -157,22 +157,24 @@ class dspp {
           out.configs[cas_name]['x-trace'] = trace;
         delete out.configs[config_name];
       }
-    }
 
-    for(let service of Object.values(out.services || {})) {
-      for(let config of service.configs || []) {
-        if(config_map[config.source])
-          config.source = config_map[config.source]['cas_name'];
+      // this need to be proceseed before 2nd pass
+      for(let service of Object.values(out.services || {})) {
+        for(let config of service.configs || []) {
+          if(config_map[config.source])
+            config.source = config_map[config.source]['cas_name'];
+        }
       }
-    }
 
-    for(let task of Object.values(out.tasks || {})) {
-      for(let config of task.configs || []) {
-        if(config_map[config.source])
-          config.source = config_map[config.source]['cas_name'];
+      for(let task of Object.values(out.tasks || {})) {
+        for(let config of task.configs || []) {
+
+          if(config_map[config.source])
+            config.source = config_map[config.source]['cas_name'];
+        }
       }
-    }
 
+    }
 
     let stack_guid = md5(stack);
 
@@ -404,7 +406,6 @@ class dspp {
     let {cas_path : stack_path} = cas.feed(compiled);
     console.error("Stack file wrote in %s (%s)", stack_path, filter ? `filter ${filter}` : "full stack");
     cas.write();
-
 
     let stack = fs.createReadStream(stack_path);
     let child = spawn('docker', ['stack', 'deploy', '--with-registry-auth', '--compose-file', '-', this.stack_name], {stdio : ['pipe', 'inherit', 'inherit']});

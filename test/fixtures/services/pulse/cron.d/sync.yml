@@ -1,0 +1,34 @@
+version: "3.8"
+
+configs:
+  rclone-config:
+    contents: |
+      [this is rclone config]
+
+tasks:
+  sync/docker_registry_china:
+    <<: *task-default
+
+    plan: "5 8 * * *"
+
+    image: rclone/rclone:1.61.1
+    command: sync -vvv --checksum cloud-services:registry-docker china-services:registry-docker
+#    entrypoint: /bin/sh -c "sleep infinity"
+
+    configs:
+      - source: rclone-config
+        target: /config/rclone/rclone.conf
+
+  sync/docker_registry_mirror_china:
+    <<: *task-default
+
+    plan: "10 */2 * * *"
+
+    image: rclone/rclone:1.61.1
+    command: copy -vvv --checksum cloud-services:registry-docker-mirror china-services:registry-docker-mirror
+#    entrypoint: /bin/sh -c "sleep infinity"
+
+    configs:
+      - source: rclone-config
+        target: /config/rclone/rclone.conf
+
