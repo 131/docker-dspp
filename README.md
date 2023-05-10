@@ -14,10 +14,10 @@ docker run -it --rm  -v .:/app 131hub/dspp production.yml
 ```
 
 # Motivation
-Complex docker stack will be composed out of dozen/hunders of microservices, volumes, and config.
-Wrapping all of them in a single compose file is tedious, and lack flexibility.
+Complex docker stack will be composed out of dozen/hundreds of microservices, volumes, and config.
+Wrapping all of them in a single compose file is tedious, and lacks flexibility.
 
-dspp allow you to split your compose file, define YAML macros/anchor, use services as metadata references, inline configuration contents, use directories as provided. 
+dspp allows you to split your compose file, define YAML macros/anchor, use services as metadata references, inline configuration contents, use directories as provided. 
 
 
 # Features
@@ -29,27 +29,30 @@ dspp allow you to split your compose file, define YAML macros/anchor, use servic
 
 # Usage sample
 ```
-dspp production.yml --ir://run=compile
-dspp production.yml --ir://run=deploy
+dspp production.yml
+dspp production.yml --ir://run=parse
+dspp production.yml --ir://run=plan --commit --ir://run=apply
 ```
 
 
 
 # Change a global macro
 ```
+=> interactive session
+dspp production.yml
 => verify all update
-dspp production.yml --ir://run=plan
+dspp production.yml --ir://run=parse
 => deploy full stack
-dspp production.yml --ir://run=apply
+dspp production.yml --ir://run=plan --commit --ir://run=apply
 ```
 
 
 # Reconfigure a service
 ```
 => verify local update
-dspp production.yml service_name --ir://run=compile
+dspp production.yml service_name --ir://run=parse
 => deploy service only
-dspp production.yml service_name  --ir://run=deploy
+dspp production.yml service_name --ir://run=plan --commit --ir://run=apply
 ```
 
 
