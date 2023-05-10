@@ -215,7 +215,7 @@ class dspp {
       services  : isEmpty(stack.services) ? undefined : stack.services,
     }), yamlStyle);
 
-    const stack_revision = md5(DSPP_VERSION + body).substr(0, 5); //source + compiled
+    const stack_revision = md5(body).substr(0, 5);
     const header = `# ${stack_name} @${stack_revision} (dspp v${DSPP_VERSION})\n`;
     const compiled = header + body;
 
