@@ -300,9 +300,12 @@ class dspp {
   async _analyze(filter) {
     let tmp = await this._analyze_local(filter);
 
-    let remote_stack    = {};
+    let total = (tmp.services_slices || []).length;
+    let progress = new ProgressBar('Reading (:total) remote services [:bar]', {...this.progressOpts, total});
 
-    for(let [service_name] of tmp.services_slices) {
+    let remote_stack    = {};
+    for(let {service_name} of (tmp.services_slices || [])) {
+      progress.tick();
       let service_current = await this._read_remote_state(service_name);
       let doc = parseDocument(service_current, {merge : true});
       deepMixIn(remote_stack, doc.toJS({maxAliasCount : -1 }));
