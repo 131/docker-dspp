@@ -1,5 +1,5 @@
-# dspp-stack @1e66d (dspp v6.0.3)
-version: "3"
+# dspp-stack @6f66c (dspp v6.0.3)
+version: "3.8"
 configs:
   clock-config-0d169:
     file: .docker-stack/.cas/0d169a03c84efedb0cdb5380677e129e

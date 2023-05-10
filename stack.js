@@ -227,7 +227,7 @@ class dspp {
     let {stack_name} = this;
 
     const body = stringify(flatten({
-      version   : "3",
+      version   : stack.version,
       configs   : isEmpty(stack.configs)  ? undefined : stack.configs,
       secrets   : isEmpty(stack.secrets)  ? undefined : stack.secrets,
       networks  : isEmpty(stack.networks) ? undefined : stack.networks,
