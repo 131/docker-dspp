@@ -34,10 +34,20 @@ class Cas {
     return {hash, cas_path};
   }
 
+  async env(env_file, source_file) {
+    let wd = path.dirname(source_file);
+    let file_path = path.join(wd, env_file);
+    let body = fs.readFileSync(file_path, 'utf-8');
+    let {cas_path} = this.feed(body);
+    return cas_path;
+  }
+
+
+
   // import
-  async config(config_name, config) {
+  async config(config_name, config, source_file) {
     let config_body;
-    let {file, contents, format, 'x-source-file' : source_file, 'x-trace' : trace = true} = config;
+    let {file, contents, format, 'x-trace' : trace = true} = config;
 
     if(file) {
       let wd = path.dirname(source_file);

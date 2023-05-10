@@ -1,4 +1,4 @@
-# dspp-stack @10983 (dspp v6.0.2)
+# dspp-stack @1e66d (dspp v6.0.3)
 version: "3"
 configs:
   clock-config-0d169:
@@ -10,8 +10,8 @@ configs:
     file: .docker-stack/.cas/b7ace5f2ebb4bfc16ed455815da4c82a
     x-trace: |
       # this is nginx conf
-  pulse-config-eff83:
-    file: .docker-stack/.cas/eff83e6dbf08c3736a650dac101fddbc
+  pulse-config-2b2ae:
+    file: .docker-stack/.cas/2b2ae2f44537d203d25a4491309d89ab
     x-trace: |
       "use strict";
 
@@ -22,11 +22,11 @@ configs:
         },
 
         docker : {
-          "socketPath": "/var/run/docker.sock",
-          "host": "localhost"
+          "socketPath" : "/var/run/docker.sock",
+          "host" : "localhost"
         },
 
-        registries:  {},
+        registries :  {},
 
       };
 
@@ -168,7 +168,7 @@ services:
       - host
   pulse:
     configs:
-      - source: pulse-config-eff83
+      - source: pulse-config-2b2ae
         target: /app/config/config.json.js
       - source: pulse-jobs-3490d
         target: /app/config/jobs.json
@@ -218,6 +218,8 @@ services:
         constraints:
           - engine.labels.background-cluster == true
       replicas: 1
+    env_file:
+      - .docker-stack/.cas/faac1e725136c23b45b7a3127724c520
     environment:
       - DEBUG=*
       - X_NGINX_ACCESS_LOG=syslog:server=gra2.logs.ovh.com:2201,nohostname

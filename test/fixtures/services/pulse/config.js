@@ -7,11 +7,11 @@ const config = {
   },
 
   docker : {
-    "socketPath": "/var/run/docker.sock",
-    "host": "localhost"
+    "socketPath" : "/var/run/docker.sock",
+    "host" : "localhost"
   },
 
-  registries:  {},
+  registries :  {},
 
 };
 

@@ -40,6 +40,9 @@ services:
       - devops-monitoring
 
 
+    env_file:
+      - ./nginx.env
+
     environment:
       - DEBUG=*
       - X_NGINX_ACCESS_LOG=syslog:server=gra2.logs.ovh.com:2201,nohostname

@@ -45,7 +45,7 @@ const CACHE_STACK_PATH = ".docker-stack";
 const CACHE_CAS_PATH   = path.posix.join(CACHE_STACK_PATH, ".cas");
 const flatten = obj => JSON.parse(JSON.stringify(obj));
 
-
+const SOURCE_FILE = Symbol("x-source-file");
 
 class dspp {
 
@@ -115,8 +115,8 @@ class dspp {
       try {
         let doc = parseDocument(body, {merge : true});
         doc = doc.toJS({maxAliasCount : -1 });
-        for(let [, config] of Object.entries(doc.configs || {}))
-          config['x-source-file'] = compose_file;
+        for(let [, obj] of [...Object.entries(doc.configs || {}), ...Object.entries(doc.services || {})])
+          obj[SOURCE_FILE] = compose_file;
         deepMixIn(out, doc);
       } catch(err) {
         console.error("\n", "Parsing failure in", compose_file);
@@ -124,15 +124,33 @@ class dspp {
       }
     }
 
-    out = sortObjByKey(out);
 
+    out = sortObjByKey(out);
     out = walk(out, v =>  replaceEnv(v, {...out, stack_name}));
+
+    let processEnv = async (obj) => {
+      if(!obj.env_file)
+        return obj;
+
+      if(Array.isArray(obj.env_file)) {
+        for(let [k, env_file] of Object.entries(obj.env_file))
+          obj.env_file[k] = await cas.env(env_file,  obj[SOURCE_FILE]);
+
+      }
+
+      if(typeof obj.env_file == "string")
+        obj.env_file = await cas.env(obj.env_file, obj[SOURCE_FILE]);
+
+      return obj;
+    };
 
     for(let [task_name, task] of Object.entries(out.tasks || {}))
       out.tasks[task_name]  = walk(task, v =>  replaceEnv(v, {...task, task_name, service_name : task_name}));
 
-    for(let [service_name, service] of Object.entries(out.services || {}))
+    for(let [service_name, service] of Object.entries(out.services || {})) {
+      service = await processEnv(service);
       out.services[service_name] = walk(service, v =>  replaceEnv(v, {...service, service_name}));
+    }
 
     let config_map = {};
     progress = new ProgressBar('Computing (:total) configs [:bar]', {...this.progressOpts, total : Object.keys(out.configs || {}).length});
@@ -151,7 +169,7 @@ class dspp {
           continue;
         progress.tick();
 
-        let {cas_path, cas_name, trace} = config_map[config_name] = await cas.config(config_name, config, config['stack_source']);
+        let {cas_path, cas_name, trace} = config_map[config_name] = await cas.config(config_name, config, config[SOURCE_FILE]);
         out.configs[cas_name] = {name : config.name, file : cas_path};
         if(trace)
           out.configs[cas_name]['x-trace'] = trace;
@@ -473,7 +491,7 @@ function sortObjByKey(value) {
   return (typeof value === 'object') ?
     (Array.isArray(value) ?
       value.map(sortObjByKey) :
-      Object.keys(value).sort().reduce(
+      Object.getOwnPropertySymbols(value).concat(Object.keys(value).sort()).reduce(
         (o, key) => {
           const v = value[key];
           o[key] = sortObjByKey(v);

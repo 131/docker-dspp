@@ -2,7 +2,6 @@
 
 const fs   = require('fs');
 const path = require('path');
-const glob = require('glob').sync;
 
 const expect = require('expect.js');
 
@@ -24,7 +23,7 @@ describe("Initial dspp check", function() {
     challenge = challenge.replace(/dspp v[0-9.]+/, `dspp v${version}`);
 
     // to record challenge, just uncomment this
-    // cas.write();
+    // cas.write(); fs.writeFileSync("compiled.yml", compiled); process.exit();
 
 
     expect(challenge).to.eql(compiled);
