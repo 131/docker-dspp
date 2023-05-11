@@ -115,9 +115,13 @@ class dspp {
       try {
         let doc = parseDocument(body, {merge : true});
         doc = doc.toJS({maxAliasCount : -1 });
-        for(let [, obj] of [...Object.entries(doc.configs || {}), ...Object.entries(doc.services || {})])
-          obj[SOURCE_FILE] = compose_file;
         deepMixIn(out, doc);
+        //deepMixin will not merge Symbols
+        for(let obj of ['services', 'configs']) {
+          for(let id of Object.keys(doc[obj] || {}))
+            out[obj][id][SOURCE_FILE] = compose_file;
+        }
+
       } catch(err) {
         console.error("\n", "Parsing failure in", compose_file);
         throw err;
