@@ -6,9 +6,14 @@ const fs    = require('fs');
 const md5   = require('nyks/crypto/md5');
 const mkdirpSync = require('nyks/fs/mkdirpSync');
 
+const progress = require('progress');
+const drain    = require('nyks/stream/drain');
+const request =  require('nyks/http/request');
+
 const {stringify} = require('yaml');
 const yamlStyle = {singleQuote : false, lineWidth : 0};
 
+const ctx = {progress, request, drain};
 
 class Cas {
 
@@ -47,7 +52,14 @@ class Cas {
   // import
   async config(config_name, config, source_file) {
     let config_body;
-    let {file, contents, format, 'x-trace' : trace = true} = config;
+    let {file, require : require_file, contents, format, 'x-trace' : trace = true} = config;
+
+    if(require_file) {
+      let wd = path.dirname(source_file);
+      let file_path = path.resolve(wd, require_file);
+      let script = require(file_path);
+      contents = typeof script == "function" ? await script(ctx) : script;
+    }
 
     if(file) {
       let wd = path.dirname(source_file);
