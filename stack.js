@@ -21,6 +21,7 @@ const wait       = require('nyks/child_process/wait');
 const pipe       = require('nyks/stream/pipe');
 const passthru   = require('nyks/child_process/passthru');
 const eachLimit = require('nyks/async/eachLimit');
+const semver     = require('semver');
 
 const {dict}  = require('nyks/process/parseArgs')();
 
@@ -61,10 +62,15 @@ class dspp {
         (typeof header == "string"  ? [header]  : header).forEach(path => config.files.push({type : 'header', path}));
     }
 
-
     if(fs.existsSync(config_file)) {
       let body = fs.readFileSync(config_file, 'utf-8');
       config = {name : path.basename(config_file, '.yml'), ...parse(body)};
+    }
+
+    let {require = {}} = config;
+    if(require.dspp) {
+      if(!semver.satisfies(DSPP_VERSION, require.dspp))
+        throw `Unsupported dspp version (requires ${require.dspp})`;
     }
 
     this.stack_name  = config.name;
