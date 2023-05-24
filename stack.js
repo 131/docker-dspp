@@ -163,7 +163,30 @@ class dspp {
     }
 
     let config_map = {};
+
     progress = new ProgressBar('Computing (:total) configs [:bar]', {...this.progressOpts, total : Object.keys(out.configs || {}).length});
+
+
+    // remap volume
+    let volumes_map = {};
+    let volumes = Object.entries(out.volumes || {});
+
+    for(let [volume_name, volume] of volumes) {
+      if(volume.external)
+        continue;
+
+      let hash = volume_hash(volume_name, volume);
+      volumes_map[volume_name] = hash, out.volumes[hash] = volume;
+      delete out.volumes[volume_name];
+    }
+
+    for(let obj of Object.values({...out.services, ...out.tasks})) {
+      for(let volume of obj.volumes || []) {
+        if(volumes_map[volume.source])
+          volume.source = volumes_map[volume.source];
+      }
+    }
+
 
     for(let skip of [
       // 1st pass : skip serialized
@@ -186,22 +209,14 @@ class dspp {
         delete out.configs[config_name];
       }
 
+
       // this need to be proceseed before 2nd pass
-      for(let service of Object.values(out.services || {})) {
-        for(let config of service.configs || []) {
+      for(let obj of Object.values({...out.services, ...out.tasks})) {
+        for(let config of obj.configs || []) {
           if(config_map[config.source])
             config.source = config_map[config.source]['cas_name'];
         }
       }
-
-      for(let task of Object.values(out.tasks || {})) {
-        for(let config of task.configs || []) {
-
-          if(config_map[config.source])
-            config.source = config_map[config.source]['cas_name'];
-        }
-      }
-
     }
 
     let stack_guid = md5(stack);
@@ -510,6 +525,12 @@ function sortObjByKey(value) {
     ) :
     value;
 }
+
+
+const volume_hash = function(volume_name, spec) {
+  return `${volume_name}_` + md5(JSON.stringify(spec)).substr(0, 5);
+};
+
 
 const isEmpty = function(obj) {
   return Object.keys(obj || {}).length === 0;
