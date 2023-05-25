@@ -37,7 +37,8 @@ const DSPP_NS         = 'dspp.namespace';
 
 
 function shellExec(cmd) {
-  let child = spawn(cmd, {shell : true, stdio : 'inherit'});
+  let shell = process.env['SHELL'] || true;
+  let child = spawn(cmd, {shell, stdio : 'inherit'});
   return wait(child);
 }
 
@@ -413,7 +414,7 @@ class dspp {
         await passthru('fc', [before, next]).catch(() => false);
       } else {
         if(style == 1)
-          await shellExec(`diff -y <(echo -e "current stack\\n---"; cat "${before}") <(echo -e "next stack\n---"; cat  "${next}") | colordiff | most`);
+          await shellExec(`diff -y <(echo -e "current stack\\n---"; cat "${before}") <(echo -e "next stack\\n---"; cat  "${next}") | colordiff | most`);
 
         if(style == 0)
           await shellExec(`cat "${next}" | git diff --no-index "${before}" - || true`);
