@@ -270,6 +270,7 @@ class dspp {
   }
 
   async _analyze_local(filter = false) {
+    filter = new RegExp(filter || ".*");
 
     let {out : {version, ...input}, cas} = await this._parse();
 
@@ -284,7 +285,7 @@ class dspp {
     for(let [service_name, service] of services) {
       progress.tick();
 
-      if(filter && !service_name.includes(filter))
+      if(!filter.test(service_name))
         continue;
 
       let stack_slice = {
