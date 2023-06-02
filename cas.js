@@ -12,6 +12,8 @@ const request =  require('nyks/http/request');
 
 const {stringify} = require('yaml');
 const yamlStyle = {singleQuote : false, lineWidth : 0};
+const here = process.cwd();
+
 
 const ctx = {progress, request, drain};
 
@@ -57,13 +59,21 @@ class Cas {
     if(require_file) {
       let wd = path.dirname(source_file);
       let file_path = path.resolve(wd, require_file);
+
+      if(!file_path.startsWith(here))
+        file_path = path.join(here, file_path);
+
       let script = require(file_path);
       contents = typeof script == "function" ? await script(ctx) : script;
     }
 
     if(file) {
       let wd = path.dirname(source_file);
-      let file_path = path.join(wd, file);
+      let file_path = path.resolve(wd, file);
+
+      if(!file_path.startsWith(here))
+        file_path = path.join(here, file_path);
+
       config_body = fs.readFileSync(file_path, 'utf-8');
       if(trace)
         trace = config_body;
