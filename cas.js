@@ -72,6 +72,10 @@ class Cas {
       let wd = path.dirname(source_file);
 
       let dir_path = path.resolve(wd, directory);
+
+      if(!dir_path.startsWith(here))
+        dir_path = path.join(here, dir_path);
+
       let files = glob("**", {nodir : true, cwd : dir_path});
 
       let ctx = 0;
