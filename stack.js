@@ -202,23 +202,38 @@ class dspp {
         if(config.external || skip(config))
           continue;
         progress.tick();
-
-        let {cas_path, cas_name, trace} = config_map[config_name] = await cas.config(config_name, config, config[SOURCE_FILE]);
-        out.configs[cas_name] = {name : config.name, file : cas_path};
-        if(trace)
-          out.configs[cas_name]['x-trace'] = trace;
+        config_map[config_name] = [];
+        for await(let line of cas.config(config_name, config, config[SOURCE_FILE])) {
+          let {cas_path, cas_name, trace} = line;
+          config_map[config_name].push(line);
+          out.configs[cas_name] = {name : config.name, file : cas_path};
+          if(trace)
+            out.configs[cas_name]['x-trace'] = trace;
+        }
         delete out.configs[config_name];
       }
 
 
+
       // this need to be proceseed before 2nd pass
       for(let obj of Object.values({...out.services, ...out.tasks})) {
-        for(let config of obj.configs || []) {
-          if(config_map[config.source])
-            config.source = config_map[config.source]['cas_name'];
+        if(!obj.configs)
+          continue;
+        let base = obj.configs || [];
+        obj.configs = [];
+
+        for(let config of  base) {
+          if(!config_map[config.source]) {
+            obj.configs.push(config);
+            continue;
+          }
+          for(let line of config_map[config.source])
+            obj.configs.push({...config, target : `${config.target}${line.target}`, source : line.cas_name});
         }
       }
     }
+
+
 
     let stack_guid = md5(stack);
 

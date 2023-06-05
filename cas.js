@@ -9,6 +9,7 @@ const mkdirpSync = require('nyks/fs/mkdirpSync');
 const progress = require('progress');
 const drain    = require('nyks/stream/drain');
 const request =  require('nyks/http/request');
+const glob       = require('glob').sync;
 
 const {stringify} = require('yaml');
 const yamlStyle = {singleQuote : false, lineWidth : 0};
@@ -52,9 +53,10 @@ class Cas {
 
 
   // import
-  async config(config_name, config, source_file) {
+  async * config(config_name, config, source_file, target = "") {
+
     let config_body;
-    let {file, require : require_file, contents, format, 'x-trace' : trace = true} = config;
+    let {file, require : require_file, contents, format, directory, 'x-trace' : trace = true} = config;
 
     if(require_file) {
       let wd = path.dirname(source_file);
@@ -65,6 +67,19 @@ class Cas {
 
       let script = require(file_path);
       contents = typeof script == "function" ? await script(ctx) : script;
+    }
+    if(directory) {
+      let wd = path.dirname(source_file);
+
+      let dir_path = path.resolve(wd, directory);
+      let files = glob("**", {nodir : true, cwd : dir_path});
+
+      let ctx = 0;
+      for(let file of files) {
+        for await(const conf of this.config(`${config_name}_${ctx++}`, {file : path.join(directory, file)}, source_file, `/${file}`))
+          yield conf;
+      }
+      return;
     }
 
     if(file) {
@@ -98,7 +113,7 @@ class Cas {
     let {hash, cas_path} = this.feed(config_body);
     let cas_name = config_name + '-' + hash.substr(0, 5);
 
-    return {hash, cas_path, cas_name, trace};
+    yield {hash, cas_path, cas_name, trace, target};
   }
 
 }
