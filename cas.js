@@ -11,7 +11,7 @@ const drain    = require('nyks/stream/drain');
 const request =  require('nyks/http/request');
 const glob       = require('glob').sync;
 
-const {stringify} = require('yaml');
+const {stringify, parseDocument} = require('yaml');
 const yamlStyle = {singleQuote : false, lineWidth : 0};
 const here = process.cwd();
 
@@ -65,9 +65,17 @@ class Cas {
       if(!file_path.startsWith(here))
         file_path = path.join(here, file_path);
 
-      let script = require(file_path);
-      contents = typeof script == "function" ? await script(ctx) : script;
+
+      if(file_path.endsWith('.yml')) {
+        let body = fs.readFileSync(file_path, 'utf-8');
+        let doc = parseDocument(body, {merge : true});
+        contents = doc.toJS({maxAliasCount : -1 });
+      } else {
+        let script = require(file_path);
+        contents = typeof script == "function" ? await script(ctx) : script;
+      }
     }
+
     if(directory) {
       let wd = path.dirname(source_file);
 
