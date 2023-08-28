@@ -86,9 +86,9 @@ class Cas {
 
       let files = glob("**", {nodir : true, cwd : dir_path});
 
-      let ctx = 0;
       for(let file of files) {
-        for await(const conf of this.config(`${config_name}_${ctx++}`, {file : path.join(directory, file)}, source_file, `/${file}`))
+        let fp = path.join(directory, file), ctx = md5(fp).substr(0, 4);
+        for await(const conf of this.config(`${config_name}_${ctx++}`, {file : fp}, source_file, `/${file}`))
           yield conf;
       }
       return;
