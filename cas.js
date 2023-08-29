@@ -6,7 +6,7 @@ const fs    = require('fs');
 const md5   = require('nyks/crypto/md5');
 const mkdirpSync = require('nyks/fs/mkdirpSync');
 
-const progress = require('progress');
+const Progress = require('progress');
 const drain    = require('nyks/stream/drain');
 const request =  require('nyks/http/request');
 const glob       = require('glob').sync;
@@ -16,7 +16,7 @@ const yamlStyle = {singleQuote : false, lineWidth : 0};
 const here = process.cwd();
 
 
-const ctx = {progress, request, drain};
+const ctx = {progress : Progress, request, drain};
 
 class Cas {
 
@@ -86,8 +86,12 @@ class Cas {
 
       let files = glob("**", {nodir : true, cwd : dir_path});
 
+      let progress = new Progress('Processing directory [:bar]',
+          {width : 60, incomplete : ' ', clear : true, total : files.length});
+
       for(let file of files) {
         let fp = path.join(directory, file), ctx = md5(fp).substr(0, 4);
+        progress.tick();
         for await(const conf of this.config(`${config_name}_${ctx}`, {file : fp}, source_file, `/${file}`))
           yield conf;
       }
