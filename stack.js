@@ -208,7 +208,7 @@ class dspp {
           config_map[config_name].push(line);
           out.configs[cas_name] = {name : config.name, file : cas_path};
           if(trace)
-            out.configs[cas_name]['x-trace'] = String(trace).replace(/\$/g, '﹩');
+            out.configs[cas_name]['x-trace'] = walk(trace, v =>  v.replace(/\$/g, '﹩'));
         }
         delete out.configs[config_name];
       }
