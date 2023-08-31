@@ -22,6 +22,7 @@ const pipe       = require('nyks/stream/pipe');
 const passthru   = require('nyks/child_process/passthru');
 const eachLimit = require('nyks/async/eachLimit');
 const semver     = require('semver');
+const stripStart = require('nyks/string/stripStart');
 
 const {dict}  = require('nyks/process/parseArgs')();
 
@@ -354,7 +355,7 @@ class dspp {
 
     let {compiled, stack_revision} = this._format(stack);
 
-    return {cas, compiled, stack_revision, services_slices};
+    return {cas, stack, compiled, stack_revision, services_slices};
   }
 
 
@@ -486,10 +487,14 @@ class dspp {
   }
 
   async config_prune() {
+    let {stack} = await this._analyze_local(), legitimates = Object.keys(stack.configs);
+
     let configs = await this.docker_sdk.configs_list({namespace : this.stack_name});
+
     await eachLimit(configs, 5, async ({ID : id, Spec : { Name : name, Labels}}) => {
-      if(Labels[DSPP_NS])
+      if(legitimates.includes(stripStart(name, `${this.stack_name}_`)) || Labels[DSPP_NS])
         return; //preserve meta dspp entries
+
       let res = await this.docker_sdk.request('DELETE', `/configs/${id}`);
       console.error("Pruning", id, name, res.statusCode);
     });

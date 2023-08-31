@@ -87,7 +87,7 @@ class Cas {
       let files = glob("**", {nodir : true, cwd : dir_path});
 
       let progress = new Progress('Processing directory [:bar]',
-          {width : 60, incomplete : ' ', clear : true, total : files.length});
+        {width : 60, incomplete : ' ', clear : true, total : files.length});
 
       for(let file of files) {
         let fp = path.join(directory, file), ctx = md5(fp).substr(0, 4);
