@@ -353,9 +353,7 @@ class dspp {
       services_slices.push({service_name, ...this._format(stack_slice)});
     }
 
-    let {compiled, stack_revision} = this._format(stack);
-
-    return {cas, stack, compiled, stack_revision, services_slices};
+    return {cas, stack, services_slices};
   }
 
 
@@ -374,13 +372,17 @@ class dspp {
       deepMixIn(remote_stack, doc.toJS({maxAliasCount : -1 }));
     }
 
-    let {compiled : current}    = this._format(remote_stack);
-    return {...tmp, current};
+    let {compiled : current}       = this._format(remote_stack);
+    let {compiled, stack_revision} = this._format(tmp.stack);
+
+    return {...tmp, compiled, stack_revision, current};
   }
 
   //public helper
   async parse() {
-    let {compiled} = await this._analyze_local();
+    let {stack} = await this._analyze_local();
+    let {compiled} = this._format(stack);
+
     return compiled;
   }
 
@@ -455,23 +457,48 @@ class dspp {
     return result;
   }
 
-  async apply() {
+  async apply(force_config = false) {
 
     let {filter} = this;
 
-    let {cas, compiled, current, services_slices} = await this._analyze(filter);
+    let {cas, stack, compiled, current, services_slices} = await this._analyze(filter);
 
     if(current != compiled && compiled != this.approved)
       return console.error("Change detected, please compile first");
+
+    if(!force_config) {
+      // tag existing configuration as external, as they are immutable
+      let configs = (await this.docker_sdk.configs_list({namespace : this.stack_name})).map(({Spec : {Name}}) => stripStart(Name, `${this.stack_name}_`));
+      let stripped = 0;
+      for(let config_name of Object.keys(stack.configs)) {
+        if(!configs.includes(config_name))
+          continue;
+        stripped++;
+        delete stack.configs[config_name];
+        stack.configs[`${this.stack_name}_${config_name}`] = { external : true};
+        for(let [, service] of Object.entries(stack.services)) {
+          for(let config of service.configs) {
+            if(config.source == config_name)
+              config.source = `${this.stack_name}_${config_name}`;
+          }
+        }
+      }
+
+      if(stripped) {
+        console.error("Stripped %d existing configs from stack", stripped);
+        ({compiled} = this._format(stack));
+      }
+    }
+
 
     let {cas_path : stack_path} = cas.feed(compiled);
     console.error("Stack file wrote in %s (%s)", stack_path, filter ? `filter ${filter}` : "full stack");
     cas.write();
 
-    let stack = fs.createReadStream(stack_path);
+    let stack_contents = fs.createReadStream(stack_path);
     let child = spawn('docker', ['stack', 'deploy', '--with-registry-auth', '--compose-file', '-', this.stack_name], {stdio : ['pipe', 'inherit', 'inherit']});
 
-    await pipe(stack, child.stdin);
+    await pipe(stack_contents, child.stdin);
     await wait(child);
 
     for(let {service_name, compiled} of services_slices)
