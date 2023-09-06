@@ -477,7 +477,7 @@ class dspp {
         delete stack.configs[config_name];
         stack.configs[`${this.stack_name}_${config_name}`] = { external : true};
         for(let [, service] of Object.entries(stack.services)) {
-          for(let config of service.configs) {
+          for(let config of service.configs || []) {
             if(config.source == config_name)
               config.source = `${this.stack_name}_${config_name}`;
           }
