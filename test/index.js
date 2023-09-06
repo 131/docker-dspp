@@ -17,7 +17,9 @@ describe("Initial dspp check", function() {
   it("Should compile a basic stack", async function() {
     let tmp = new Dspp("manifest.yml");
 
-    let {cas, compiled} = await tmp._analyze_local();
+    let {cas, stack} = await tmp._analyze_local();
+    let {compiled} = tmp._format(stack);
+
     let challenge = fs.readFileSync("compiled.yml", "utf-8");
 
     challenge = challenge.replace(/dspp v[0-9.]+/, `dspp v${version}`);

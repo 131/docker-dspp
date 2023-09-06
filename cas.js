@@ -6,16 +6,17 @@ const fs    = require('fs');
 const md5   = require('nyks/crypto/md5');
 const mkdirpSync = require('nyks/fs/mkdirpSync');
 
-const progress = require('progress');
+const Progress = require('progress');
 const drain    = require('nyks/stream/drain');
 const request =  require('nyks/http/request');
+const glob       = require('glob').sync;
 
-const {stringify} = require('yaml');
+const {stringify, parseDocument} = require('yaml');
 const yamlStyle = {singleQuote : false, lineWidth : 0};
 const here = process.cwd();
 
 
-const ctx = {progress, request, drain};
+const ctx = {progress : Progress, request, drain};
 
 class Cas {
 
@@ -52,9 +53,10 @@ class Cas {
 
 
   // import
-  async config(config_name, config, source_file) {
+  async * config(config_name, config, source_file, target = "") {
+
     let config_body;
-    let {file, require : require_file, contents, format, 'x-trace' : trace = true} = config;
+    let {file, require : require_file, contents, format, directory, 'x-trace' : trace = true} = config;
 
     if(require_file) {
       let wd = path.dirname(source_file);
@@ -63,8 +65,37 @@ class Cas {
       if(!file_path.startsWith(here))
         file_path = path.join(here, file_path);
 
-      let script = require(file_path);
-      contents = typeof script == "function" ? await script(ctx) : script;
+
+      if(file_path.endsWith('.yml')) {
+        let body = fs.readFileSync(file_path, 'utf-8');
+        let doc = parseDocument(body, {merge : true});
+        contents = doc.toJS({maxAliasCount : -1 });
+      } else {
+        let script = require(file_path);
+        contents = typeof script == "function" ? await script(ctx) : script;
+      }
+    }
+
+    if(directory) {
+      let wd = path.dirname(source_file);
+
+      let dir_path = path.resolve(wd, directory);
+
+      if(!dir_path.startsWith(here))
+        dir_path = path.join(here, dir_path);
+
+      let files = glob("**", {nodir : true, cwd : dir_path});
+
+      let progress = new Progress('Processing directory [:bar]',
+        {width : 60, incomplete : ' ', clear : true, total : files.length});
+
+      for(let file of files) {
+        let fp = path.join(directory, file), ctx = md5(fp).substr(0, 4);
+        progress.tick();
+        for await(const conf of this.config(`${config_name}_${ctx}`, {file : fp}, source_file, `/${file}`))
+          yield conf;
+      }
+      return;
     }
 
     if(file) {
@@ -98,7 +129,7 @@ class Cas {
     let {hash, cas_path} = this.feed(config_body);
     let cas_name = config_name + '-' + hash.substr(0, 5);
 
-    return {hash, cas_path, cas_name, trace};
+    yield {hash, cas_path, cas_name, trace, target};
   }
 
 }

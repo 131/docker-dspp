@@ -22,6 +22,7 @@ const pipe       = require('nyks/stream/pipe');
 const passthru   = require('nyks/child_process/passthru');
 const eachLimit = require('nyks/async/eachLimit');
 const semver     = require('semver');
+const stripStart = require('nyks/string/stripStart');
 
 const {dict}  = require('nyks/process/parseArgs')();
 
@@ -213,23 +214,38 @@ class dspp {
         if(config.external || skip(config))
           continue;
         progress.tick();
-
-        let {cas_path, cas_name, trace} = config_map[config_name] = await cas.config(config_name, config, config[SOURCE_FILE]);
-        out.configs[cas_name] = {name : config.name, file : cas_path};
-        if(trace)
-          out.configs[cas_name]['x-trace'] = trace;
+        config_map[config_name] = [];
+        for await(let line of cas.config(config_name, config, config[SOURCE_FILE])) {
+          let {cas_path, cas_name, trace} = line;
+          config_map[config_name].push(line);
+          out.configs[cas_name] = {name : config.name, file : cas_path};
+          if(trace)
+            out.configs[cas_name]['x-trace'] = walk(trace, v =>  v.replace(/\$(?![a-z${])/gi, '$$$')); //insert zero width white space
+        }
         delete out.configs[config_name];
       }
 
 
+
       // this need to be proceseed before 2nd pass
       for(let obj of Object.values({...out.services, ...out.tasks})) {
-        for(let config of obj.configs || []) {
-          if(config_map[config.source])
-            config.source = config_map[config.source]['cas_name'];
+        if(!obj.configs)
+          continue;
+        let base = obj.configs || [];
+        obj.configs = [];
+
+        for(let config of  base) {
+          if(!config_map[config.source]) {
+            obj.configs.push(config);
+            continue;
+          }
+          for(let line of config_map[config.source])
+            obj.configs.push({...config, target : `${config.target}${line.target}`, source : line.cas_name});
         }
       }
     }
+
+
 
     let stack_guid = md5(stack);
 
@@ -348,9 +364,7 @@ class dspp {
       services_slices.push({service_name, ...this._format(stack_slice)});
     }
 
-    let {compiled, stack_revision} = this._format(stack);
-
-    return {cas, compiled, stack_revision, services_slices};
+    return {cas, stack, services_slices};
   }
 
 
@@ -369,13 +383,17 @@ class dspp {
       deepMixIn(remote_stack, doc.toJS({maxAliasCount : -1 }));
     }
 
-    let {compiled : current}    = this._format(remote_stack);
-    return {...tmp, current};
+    let {compiled : current}       = this._format(remote_stack);
+    let {compiled, stack_revision} = this._format(tmp.stack);
+
+    return {...tmp, compiled, stack_revision, current};
   }
 
   //public helper
   async parse() {
-    let {compiled} = await this._analyze_local();
+    let {stack} = await this._analyze_local();
+    let {compiled} = this._format(stack);
+
     return compiled;
   }
 
@@ -450,23 +468,48 @@ class dspp {
     return result;
   }
 
-  async apply() {
+  async apply(force_config = false) {
 
     let {filter} = this;
 
-    let {cas, compiled, current, services_slices} = await this._analyze(filter);
+    let {cas, stack, compiled, current, services_slices} = await this._analyze(filter);
 
     if(current != compiled && compiled != this.approved)
       return console.error("Change detected, please compile first");
+
+    if(!force_config) {
+      // tag existing configuration as external, as they are immutable
+      let configs = (await this.docker_sdk.configs_list({namespace : this.stack_name})).map(({Spec : {Name}}) => stripStart(Name, `${this.stack_name}_`));
+      let stripped = 0;
+      for(let config_name of Object.keys(stack.configs)) {
+        if(!configs.includes(config_name))
+          continue;
+        stripped++;
+        delete stack.configs[config_name];
+        stack.configs[`${this.stack_name}_${config_name}`] = { external : true};
+        for(let [, service] of Object.entries(stack.services)) {
+          for(let config of service.configs) {
+            if(config.source == config_name)
+              config.source = `${this.stack_name}_${config_name}`;
+          }
+        }
+      }
+
+      if(stripped) {
+        console.error("Stripped %d existing configs from stack", stripped);
+        ({compiled} = this._format(stack));
+      }
+    }
+
 
     let {cas_path : stack_path} = cas.feed(compiled);
     console.error("Stack file wrote in %s (%s)", stack_path, filter ? `filter ${filter}` : "full stack");
     cas.write();
 
-    let stack = fs.createReadStream(stack_path);
+    let stack_contents = fs.createReadStream(stack_path);
     let child = spawn('docker', ['stack', 'deploy', '--with-registry-auth', '--compose-file', '-', this.stack_name], {stdio : ['pipe', 'inherit', 'inherit']});
 
-    await pipe(stack, child.stdin);
+    await pipe(stack_contents, child.stdin);
     await wait(child);
 
     for(let {service_name, compiled} of services_slices)
@@ -482,10 +525,14 @@ class dspp {
   }
 
   async config_prune() {
+    let {stack} = await this._analyze_local(), legitimates = Object.keys(stack.configs);
+
     let configs = await this.docker_sdk.configs_list({namespace : this.stack_name});
+
     await eachLimit(configs, 5, async ({ID : id, Spec : { Name : name, Labels}}) => {
-      if(Labels[DSPP_NS])
+      if(legitimates.includes(stripStart(name, `${this.stack_name}_`)) || Labels[DSPP_NS])
         return; //preserve meta dspp entries
+
       let res = await this.docker_sdk.request('DELETE', `/configs/${id}`);
       console.error("Pruning", id, name, res.statusCode);
     });
