@@ -92,7 +92,7 @@ class Cas {
       for(let file of files) {
         let fp = path.join(directory, file), ctx = md5(fp).substr(0, 4);
         progress.tick();
-        for await(const conf of this.config(`${config_name}_${ctx}`, {file : fp}, source_file, `/${file}`))
+        for await(const conf of this.config(`${config_name}_${ctx}`, {file : fp, 'x-trace' : trace}, source_file, `/${file}`))
           yield conf;
       }
       return;
