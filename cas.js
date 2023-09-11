@@ -56,10 +56,14 @@ class Cas {
   async * config(config_name, config, source_file, target = "") {
 
     let config_body;
-    let {file, require : require_file, contents, format, directory, 'x-trace' : trace = true} = config;
+    let {file, args, require : require_file, contents, format, directory, 'x-trace' : trace = true} = config;
 
     if(require_file) {
       let wd = path.dirname(source_file);
+
+      if(!Array.isArray(args))
+        args = [args];
+
       let file_path = path.resolve(wd, require_file);
 
       if(!file_path.startsWith(here))
@@ -72,7 +76,7 @@ class Cas {
         contents = doc.toJS({maxAliasCount : -1 });
       } else {
         let script = require(file_path);
-        contents = typeof script == "function" ? await script(ctx) : script;
+        contents = typeof script == "function" ? await script(ctx, ...args) : script;
       }
     }
 
