@@ -13,10 +13,13 @@ const glob       = require('glob').sync;
 
 const {stringify, parseDocument} = require('yaml');
 const yamlStyle = {singleQuote : false, lineWidth : 0};
+
+const replaceEnv = require('./replaceEnv');
+
 const here = process.cwd();
 
 
-const ctx = {progress : Progress, request, drain};
+const ctx = {progress : Progress, request, drain, replaceEnv};
 
 class Cas {
 

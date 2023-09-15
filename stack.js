@@ -9,7 +9,6 @@ const spawn = require('child_process').spawn;
 const {PassThrough} = require('stream');
 
 const deepMixIn  = require('mout/object/deepMixIn');
-const jqdive     = require('nyks/object/jqdive');
 const glob       = require('glob').sync;
 
 const walk       = require('nyks/object/walk');
@@ -32,6 +31,8 @@ const DockerSDK = require('@131/docker-sdk');
 const {escape}  = DockerSDK;
 
 const Cas       = require('./cas');
+const replaceEnv = require('./replaceEnv');
+
 
 const DOCKER_STACK_NS = 'com.docker.stack.namespace';
 const DSPP_NS         = 'dspp.namespace';
@@ -597,19 +598,6 @@ if(module.parent === null) //ensure module is called directly, i.e. not required
 
 
 
-const replaceEnv = function(str, dict) {
-  let mask = /(?:\$\$([a-z0-9._-]+))|(?:\$\$\{([^}]+)\})/i, match;
-  if((match = mask.exec(str))) {
-    const key = match[1] || match[2];
-    let v = jqdive(dict, key);
-    if(v !== undefined) {
-      if(typeof v == "object")
-        return v;
-      return replaceEnv(str.replace(match[0], v), dict);
-    }
-  }
-  return str;
-};
 
 
 
