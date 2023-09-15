@@ -67,13 +67,17 @@ class dspp {
     if(fs.existsSync(config_file)) {
       let body = fs.readFileSync(config_file, 'utf-8');
       config = {name : path.basename(config_file, '.yml'), ...parse(body)};
+
+      let {dependencies = {}} = require(path.resolve(path.join(path.dirname(config_file), 'package.json')));
+
+      for(let [module_name, module_version]  of Object.entries(dependencies)) {
+        let {version} = require(require.resolve(`${module_name}/package.json`));
+        if(!semver.satisfies(version, module_version))
+          throw `Unsupported ${module_name} version (requires ${module_version})`;
+      }
     }
 
-    let {require = {}} = config;
-    if(require.dspp) {
-      if(!semver.satisfies(DSPP_VERSION, require.dspp))
-        throw `Unsupported dspp version (requires ${require.dspp})`;
-    }
+
 
     this.stack_name  = config.name;
     this.docker_sdk  = new DockerSDK(this.stack_name);
@@ -380,7 +384,9 @@ class dspp {
 
   //public helper
   async parse() {
-    let {stack} = await this._analyze_local();
+    let {filter} = this;
+
+    let {stack} = await this._analyze_local(filter);
     let {compiled} = this._format(stack);
 
     return compiled;
