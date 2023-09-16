@@ -69,7 +69,7 @@ class dspp {
       let body = fs.readFileSync(config_file, 'utf-8');
       config = {name : path.basename(config_file, '.yml'), ...parse(body)};
 
-      let {dependencies = {}} = require(path.resolve(path.join(path.dirname(config_file), 'package.json')));
+      let {dependencies = {}} = require(path.resolve('package.json'));
 
       for(let [module_name, module_version]  of Object.entries(dependencies)) {
         let {version} = require(require.resolve(`${module_name}/package.json`));
