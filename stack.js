@@ -295,15 +295,15 @@ class dspp {
   }
 
   async config(entry = null) {
-    let {out : {version, ...input}, cas} = await this._parse();
+    let {out : {...input}, cas} = await this._parse();
 
-   let out = {};
-   for(let [, config] of Object.entries(input.configs)) {
-     let config_name = config[CONFIG_NAME];
-     out[config_name] = cas.store[config.file]
-   }
-   if(!entry)
-    entry = Object.keys(out)[0];
+    let out = {};
+    for(let [, config] of Object.entries(input.configs)) {
+      let config_name = config[CONFIG_NAME];
+      out[config_name] = cas.store[config.file];
+    }
+    if(!entry)
+      entry = Object.keys(out)[0];
 
     return out[entry];
   }
