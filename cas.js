@@ -11,7 +11,9 @@ const drain    = require('nyks/stream/drain');
 const request =  require('nyks/http/request');
 const glob       = require('glob').sync;
 
-const {stringify, parseDocument} = require('yaml');
+const yaml = require('yaml');
+
+const {stringify, parseDocument} = yaml;
 const yamlStyle = {singleQuote : false, lineWidth : 0};
 
 const replaceEnv = require('./replaceEnv');
@@ -19,7 +21,7 @@ const replaceEnv = require('./replaceEnv');
 const here = process.cwd();
 
 
-const ctx = {progress : Progress, request, drain, replaceEnv};
+const ctx = {progress : Progress, request, drain, replaceEnv, yaml};
 
 class Cas {
 

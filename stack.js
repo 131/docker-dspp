@@ -50,6 +50,7 @@ const CACHE_CAS_PATH   = path.posix.join(CACHE_STACK_PATH, ".cas");
 const flatten = obj => JSON.parse(JSON.stringify(obj));
 
 const SOURCE_FILE = Symbol("x-source-file");
+const CONFIG_NAME = Symbol("x-config-name");
 
 class dspp {
 
@@ -89,7 +90,7 @@ class dspp {
     this.header_files = config.header_files || [];
     this.compose_files = config.compose_files || [];
 
-    for(let line of config.files) {
+    for(let line of config.files || []) {
       if(typeof line == 'string')
         line = {type : 'compose', path : line};
 
@@ -102,6 +103,9 @@ class dspp {
       if(type == "compose")
         this.compose_files.push(...path);
     }
+
+    if(fs.existsSync(config_file))
+      this.compose_files.push(config_file);
 
     this.filter   = filter;
   }
@@ -212,7 +216,7 @@ class dspp {
         for await(let line of cas.config(config_name, config, config[SOURCE_FILE])) {
           let {cas_path, cas_name, trace} = line;
           config_map[config_name].push(line);
-          out.configs[cas_name] = {name : config.name, file : cas_path};
+          out.configs[cas_name] = {name : config.name, file : cas_path, [CONFIG_NAME] : config_name};
           if(trace)
             out.configs[cas_name]['x-trace'] = walk(trace, v =>  v.replace(/\$(?![a-z${])/gi, '$$$')); //insert zero width white space
         }
@@ -288,6 +292,20 @@ class dspp {
 
 
     return {stack_revision, compiled};
+  }
+
+  async config(entry = null) {
+    let {out : {version, ...input}, cas} = await this._parse();
+
+   let out = {};
+   for(let [, config] of Object.entries(input.configs)) {
+     let config_name = config[CONFIG_NAME];
+     out[config_name] = cas.store[config.file]
+   }
+   if(!entry)
+    entry = Object.keys(out)[0];
+
+    return out[entry];
   }
 
   async _analyze_local(filter = false) {
