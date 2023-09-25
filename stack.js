@@ -294,7 +294,7 @@ class dspp {
     return {stack_revision, compiled};
   }
 
-  async config(entry = null) {
+  async config(config_name) {
     let {out : {...input}, cas} = await this._parse();
 
     let out = {};
@@ -302,10 +302,8 @@ class dspp {
       let config_name = config[CONFIG_NAME];
       out[config_name] = cas.store[config.file];
     }
-    if(!entry)
-      entry = Object.keys(out)[0];
 
-    return out[entry];
+    return out[config_name];
   }
 
   async _analyze_local(filter = false) {
