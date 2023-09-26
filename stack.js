@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
+
 const {version : DSPP_VERSION } = require('./package.json');
 
 const fs    = require('fs');
@@ -22,10 +23,10 @@ const passthru   = require('nyks/child_process/passthru');
 const eachLimit = require('nyks/async/eachLimit');
 const semver     = require('semver');
 const stripStart = require('nyks/string/stripStart');
-
+const guid       = require('mout/random/guid');
 const {dict}  = require('nyks/process/parseArgs')();
 
-const {stringify, parse, parseDocument,  Parser, Composer} = require('yaml');
+const {stringify, parse, parseDocument,  Parser, Composer, visit, isAlias} = require('yaml');
 
 const DockerSDK = require('@131/docker-sdk');
 const {escape}  = DockerSDK;
@@ -124,14 +125,29 @@ class dspp {
 
     let progress = new ProgressBar('Computing stack files [:bar]', {...this.progressOpts, total : compose_files.length});
 
+    const merged = [];
+
+
     for(let compose_file of compose_files || []) {
       let body = env + fs.readFileSync(compose_file, 'utf-8');
       stack += `${body}\n---\n`;
       progress.tick();
 
       try {
-        let doc = parseDocument(body, {merge : true});
-        doc = doc.toJS({maxAliasCount : -1 });
+
+        const tokens = new Parser().parse(body);
+        const docs = new Composer({merge : true, uniqueKeys : false}).compose(tokens);
+        let doc = docs.next().value;
+
+        //custom behavior for non alias merges
+        visit(doc, (key, node, path) => {
+          if(key == "key" && node.value == "<<" && !isAlias(path[path.length - 1].value)) {
+            node.value = guid();
+            merged.push(node.value);
+          }
+        });
+
+        doc = doc.toJS({maxAliasCount : -1});
         deepMixIn(out, doc);
         //deepMixin will not merge Symbols
         for(let obj of ['services', 'configs']) {
@@ -243,7 +259,20 @@ class dspp {
       }
     }
 
+    deepWalk(out, (v) => {
+      if(typeof v !== "object")
+        return v;
 
+      let keys = Object.keys(v);
+      for(let k of keys) {
+        if(merged.includes(k)) {
+          let drop = v[k];
+          delete v[k];
+          Object.assign(v, drop);
+        }
+      }
+      return v;
+    });
 
     let stack_guid = md5(stack);
 
@@ -607,6 +636,18 @@ const volume_hash = function(volume_name, spec) {
 const isEmpty = function(obj) {
   return Object.keys(obj || {}).length === 0;
 };
+
+
+const deepWalk = function(obj, processor) {
+  if(typeof obj !== "object")
+    return obj;
+
+  for(let k in obj)
+    obj[k] = processor(deepWalk(obj[k], processor), k);
+
+  return obj;
+};
+
 
 
 if(module.parent === null) //ensure module is called directly, i.e. not required
