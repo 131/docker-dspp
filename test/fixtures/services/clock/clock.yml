@@ -3,10 +3,14 @@ version: "3.8"
 configs:
   clock-config:
     contents: $${services.clock.environment.CLOCK_TZ}
+x-env-clock:
+  test: foo
+  test1: bar
 
 services:
   clock:
     environment:
+      <<: $${x-env-clock}
       CLOCK_TZ: America/Dallas
 
     image: si/clock:v1.0.1

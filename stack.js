@@ -217,7 +217,7 @@ class dspp {
 
     // maybe we should move that in config multi-pass below
     deepWalk(out, (v) => {
-      if(typeof v !== "object")
+      if(typeof v !== "object" || v === null)
         return v;
 
       let keys = Object.keys(v);
@@ -643,7 +643,7 @@ const isEmpty = function(obj) {
 
 
 const deepWalk = function(obj, processor) {
-  if(typeof obj !== "object")
+  if(typeof obj !== "object" || obj === null)
     return obj;
 
   for(let k in obj)
