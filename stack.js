@@ -215,6 +215,22 @@ class dspp {
     }
 
 
+    // maybe we should move that in config multi-pass below
+    deepWalk(out, (v) => {
+      if(typeof v !== "object")
+        return v;
+
+      let keys = Object.keys(v);
+      for(let k of keys) {
+        if(merged.includes(k)) {
+          let drop = v[k];
+          delete v[k];
+          Object.assign(v, drop);
+        }
+      }
+      return v;
+    });
+
     for(let skip of [
       // 1st pass : skip serialized
       config => !!config.format,
@@ -223,6 +239,7 @@ class dspp {
     ]) {
 
       let configs = Object.entries(out.configs || {});
+
 
       for(let [config_name, config] of configs) {
         if(config.external || skip(config))
@@ -259,20 +276,7 @@ class dspp {
       }
     }
 
-    deepWalk(out, (v) => {
-      if(typeof v !== "object")
-        return v;
 
-      let keys = Object.keys(v);
-      for(let k of keys) {
-        if(merged.includes(k)) {
-          let drop = v[k];
-          delete v[k];
-          Object.assign(v, drop);
-        }
-      }
-      return v;
-    });
 
     let stack_guid = md5(stack);
 
