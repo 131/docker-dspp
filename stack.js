@@ -251,7 +251,8 @@ class dspp {
           config_map[config_name].push(line);
           out.configs[cas_name] = {name : config.name, file : cas_path, [CONFIG_NAME] : config_name};
           if(trace)
-            out.configs[cas_name]['x-trace'] = walk(trace, v =>  v.replace(/\$(?![a-z${])/gi, '$$$')); //insert zero width white space
+          //walk(trace, v =>  v.replace(/\$(?![a-z${])/gi, '$$$')); //this is no longer necessary since x-traces are not deployed
+            out.configs[cas_name]['x-trace'] = trace;
         }
         delete out.configs[config_name];
       }
