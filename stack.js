@@ -546,6 +546,11 @@ class dspp {
       }
     }
 
+    // strip invalid $ interpolation in x-traces
+    for(let [, config] of Object.entries(stack.configs))
+      delete config['x-trace'];
+
+    ({compiled} = this._format(stack));
 
     let {cas_path : stack_path} = cas.feed(compiled);
     console.error("Stack file wrote in %s (%s)", stack_path, filter ? `filter ${filter}` : "full stack");
