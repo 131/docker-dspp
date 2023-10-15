@@ -58,10 +58,10 @@ class Cas {
 
 
   // import
-  async * config(config_name, config, source_file, target = "") {
+  async * config(config_map, config_name, config, source_file, target = "") {
 
     let config_body;
-    let {file, args, require : require_file, contents, format, directory, 'x-trace' : trace = true} = config;
+    let {file, args, bundle, require : require_file, contents, format, directory, 'x-trace' : trace = true} = config;
 
     if(require_file) {
       let file_path, wd = path.dirname(source_file);
@@ -88,6 +88,17 @@ class Cas {
       }
     }
 
+    if(bundle) {
+      for(let {source, target, mode} of  bundle) {
+        if(!config_map[source])
+          continue;
+        for(let line of config_map[source])
+          yield {...line, target : `${target}${line.target}`, mode};
+
+      }
+      return;
+    }
+
     if(directory) {
       let wd = path.dirname(source_file);
 
@@ -104,7 +115,7 @@ class Cas {
       for(let file of files) {
         let fp = path.join(directory, file), ctx = md5(fp).substr(0, 4);
         progress.tick();
-        for await(const conf of this.config(`${config_name}_${ctx}`, {file : fp, 'x-trace' : trace}, source_file, `/${file}`))
+        for await(const conf of this.config(config_map, `${config_name}_${ctx}`, {file : fp, 'x-trace' : trace}, source_file, `/${file}`))
           yield conf;
       }
       return;

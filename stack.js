@@ -233,20 +233,23 @@ class dspp {
 
     for(let skip of [
       // 1st pass : skip serialized
-      config => !!config.format,
+      config => !!config.external || !!config.format || !!config.bundle,
+      // 2nd pass : skip bundle
+      config => !!config.external || !!config.file  || !!config.bundle,
       // 2nd pass : skip processed
-      config => !!config.file,
+      config => !!config.external || !!config.file,
     ]) {
 
       let configs = Object.entries(out.configs || {});
 
 
       for(let [config_name, config] of configs) {
-        if(config.external || skip(config))
+        if(skip(config))
           continue;
+
         progress.tick();
         config_map[config_name] = [];
-        for await(let line of cas.config(config_name, config, config[SOURCE_FILE])) {
+        for await(let line of cas.config(config_map, config_name, config, config[SOURCE_FILE])) {
           let {cas_path, cas_name, trace} = line;
           config_map[config_name].push(line);
           out.configs[cas_name] = {name : config.name, file : cas_path, [CONFIG_NAME] : config_name};
@@ -272,7 +275,7 @@ class dspp {
             continue;
           }
           for(let line of config_map[config.source])
-            obj.configs.push({...config, target : `${config.target}${line.target}`, source : line.cas_name});
+            obj.configs.push({...config, target : `${config.target}${line.target}`, source : line.cas_name, mode : config.mode || line.mode});
         }
       }
     }
