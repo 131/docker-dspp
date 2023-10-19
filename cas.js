@@ -9,6 +9,7 @@ const mkdirpSync = require('nyks/fs/mkdirpSync');
 const Progress = require('progress');
 const drain    = require('nyks/stream/drain');
 const request =  require('nyks/http/request');
+const walk       = require('nyks/object/walk');
 const glob       = require('glob').sync;
 
 const yaml = require('yaml');
@@ -134,6 +135,8 @@ class Cas {
     }
 
     if(contents) {
+      if(args)
+        contents = walk(contents, v =>  replaceEnv(v, args));
       if(format == "json")
         config_body = JSON.stringify(contents, null, 2);
       else if(format == "yaml")
