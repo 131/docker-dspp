@@ -59,6 +59,7 @@ class dspp {
     console.error("Hi", `dspp v${DSPP_VERSION}`);
 
     let config   = {files : [], name : "stack"};
+
     if(!config_file && 'file' in dict) {
       let {file, header} = dict;
       config.files = typeof file == "string" ? [file] : file;
@@ -134,6 +135,12 @@ class dspp {
       progress.tick();
 
       try {
+        let ctx = {...dict};
+        let token = guid();
+
+        body = body.replace(new RegExp('\\$\\$\\{', "g"), token);
+        body = Function('{ctx}', "return `" + body + "`;").call(null, {ctx});
+        body = body.replace(new RegExp(token, "g"), '$$$${'); // $ is a special replacement char
 
         const tokens = new Parser().parse(body);
         const docs = new Composer({merge : true, uniqueKeys : false}).compose(tokens);
