@@ -1,4 +1,4 @@
-# dspp-stack @061a9 (dspp v6.0.3)
+# dspp-stack @7e6ce (dspp v6.0.3)
 version: "3.8"
 configs:
   clock-config-0d169:
@@ -257,3 +257,92 @@ services:
         protocol: tcp
         published: 1445
         target: 1445
+tasks:
+  sync/docker_registry_china:
+    command: sync -vvv --checksum cloud-services:registry-docker china-services:registry-docker
+    configs:
+      - source: rclone-config-1b87d
+        target: /config/rclone/rclone.conf
+    deploy:
+      placement:
+        constraints:
+          - engine.labels.background-cluster == true
+      replicas: 1
+    dns: 8.8.8.8
+    environment:
+      X-OVH-TOKEN: abcd
+    image: rclone/rclone:1.61.1
+    logging:
+      driver: gelf
+      options:
+        env: X-OVH-TOKEN
+        gelf-address: udp://gra2.logs.ovh.com:2202
+        tag: sync/docker_registry_china
+    networks:
+      - default
+    plan: 5 8 * * *
+  sync/docker_registry_mirror_china:
+    command: copy -vvv --checksum cloud-services:registry-docker-mirror china-services:registry-docker-mirror
+    configs:
+      - source: rclone-config-1b87d
+        target: /config/rclone/rclone.conf
+    deploy:
+      placement:
+        constraints:
+          - engine.labels.background-cluster == true
+      replicas: 1
+    dns: 8.8.8.8
+    environment:
+      X-OVH-TOKEN: abcd
+    image: rclone/rclone:1.61.1
+    logging:
+      driver: gelf
+      options:
+        env: X-OVH-TOKEN
+        gelf-address: udp://gra2.logs.ovh.com:2202
+        tag: sync/docker_registry_mirror_china
+    networks:
+      - default
+    plan: 10 */2 * * *
+  test/sleep_1h:
+    command: -c "sleep 1h"
+    deploy:
+      placement:
+        constraints:
+          - engine.labels.background-cluster == true
+      replicas: 1
+    dns: 8.8.8.8
+    entrypoint: /bin/bash
+    environment:
+      X-OVH-TOKEN: abcd
+    image: debian:bullseye
+    logging:
+      driver: gelf
+      options:
+        env: X-OVH-TOKEN
+        gelf-address: udp://gra2.logs.ovh.com:2202
+        tag: test/sleep_1h
+    networks:
+      - default
+    plan: false
+  trigger/nopethrow:
+    command: -c "exit 1"
+    deploy:
+      placement:
+        constraints:
+          - engine.labels.background-cluster == true
+      replicas: 1
+    dns: 8.8.8.8
+    entrypoint: /bin/sh
+    environment:
+      X-OVH-TOKEN: abcd
+    image: debian:bullseye
+    logging:
+      driver: gelf
+      options:
+        env: X-OVH-TOKEN
+        gelf-address: udp://gra2.logs.ovh.com:2202
+        tag: trigger/nopethrow
+    networks:
+      - default
+    plan: false

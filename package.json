@@ -28,8 +28,8 @@
   },
   "homepage": "https://github.com/131/docker-dspp#readme",
   "dependencies": {
-    "@131/docker-sdk": "^1.4.5",
-    "cnyks": "^3.0.0",
+    "@131/docker-sdk": "^1.5.0",
+    "cnyks": "^3.0.6",
     "glob": "^7.2.0",
     "mout": "^1.0.0",
     "nyks": "^6.9.1",

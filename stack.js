@@ -24,6 +24,8 @@ const eachLimit = require('nyks/async/eachLimit');
 const semver     = require('semver');
 const stripStart = require('nyks/string/stripStart');
 const guid       = require('mout/random/guid');
+const get        = require('mout/object/get');
+
 const {dict}  = require('nyks/process/parseArgs')();
 
 const {stringify, parse, parseDocument,  Parser, Composer, visit, isAlias} = require('yaml');
@@ -37,7 +39,8 @@ const replaceEnv = require('./replaceEnv');
 
 const DOCKER_STACK_NS = 'com.docker.stack.namespace';
 const DSPP_NS         = 'dspp.namespace';
-
+const DSPP_STATE      = 'dspp.state';
+const DSPP_TASK_NAME  = 'dspp.task.name';
 
 function shellExec(cmd) {
   let shell = process.env['SHELL'] || true;
@@ -157,7 +160,7 @@ class dspp {
         doc = doc.toJS({maxAliasCount : -1});
         deepMixIn(out, doc);
         //deepMixin will not merge Symbols
-        for(let obj of ['services', 'configs']) {
+        for(let obj of ['services', 'configs', 'tasks']) {
           for(let id of Object.keys(doc[obj] || {}))
             out[obj][id][SOURCE_FILE] = compose_file;
         }
@@ -172,7 +175,7 @@ class dspp {
     out = sortObjByKey(out);
     out = walk(out, v =>  replaceEnv(v, {...out, stack_name}));
 
-    let processEnv = async (obj) => {
+    let processEnvFile = async (obj) => {
       if(!obj.env_file)
         return obj;
 
@@ -188,19 +191,15 @@ class dspp {
       return obj;
     };
 
-    let tasks = {};
-    //this is legacy to be dropped
     for(let [task_name, task] of Object.entries(out.tasks || {}))
       out.tasks[task_name]  = walk(task, v =>  replaceEnv(v, {...task, task_name, service_name : task_name}));
 
     for(let [service_name, service] of Object.entries(out.services || {})) {
-      service = await processEnv(service);
-
-      for(let [task_name, task] of Object.entries(service.tasks || {}))
-        tasks[task_name] = service.tasks[task_name]  = walk(task, v =>  replaceEnv(v, {...task, task_name, service_name : task_name}));
+      service = await processEnvFile(service);
 
       out.services[service_name] = walk(service, v =>  replaceEnv(v, {...service, service_name}));
     }
+
 
     let config_map = {};
 
@@ -220,7 +219,7 @@ class dspp {
       delete out.volumes[volume_name];
     }
 
-    for(let obj of Object.values({...out.services, ...out.tasks, ...tasks})) {
+    for(let obj of Object.values({...out.services, ...out.tasks})) {
       for(let volume of obj.volumes || []) {
         if(volumes_map[volume.source])
           volume.source = volumes_map[volume.source];
@@ -276,7 +275,7 @@ class dspp {
 
 
       // this need to be proceseed before 2nd pass
-      for(let obj of Object.values({...out.services, ...out.tasks, ...tasks})) {
+      for(let obj of Object.values({...out.services, ...out.tasks})) {
         if(!obj.configs)
           continue;
         let base = obj.configs || [];
@@ -299,6 +298,7 @@ class dspp {
 
     return {out : {
       services : {},
+      tasks    : {},
       configs  : {},
       volumes  : {},
       secrets  : {},
@@ -307,19 +307,38 @@ class dspp {
     }, stack_guid, cas};
   }
 
-  async _read_remote_state(service_name) {
-    let entry = escape(`${this.stack_name}.dspp.${service_name}`);
-    return (await this.docker_sdk.config_read(entry)) || "";
+  async _read_task_remote_state(task_name) {
+    let task_key = escape(`${this.stack_name}_tasks.${task_name}`);
+    let config = await this.docker_sdk.configs_list({name : task_key}).then(list => list[0]);
+    let state = (get(config, "Spec.Labels") || {}) [DSPP_STATE] || "";
+    return state;
+  }
+
+  async _write_task_remote_state(task_name, task, compiled) {
+    let task_key = escape(`${this.stack_name}_tasks.${task_name}`);
+    let body = JSON.stringify({...task, name : task_name});
+    console.error("Update task %s (id:%s)", task_name, task_key);
+    let labels = {
+      [DOCKER_STACK_NS] : this.stack_name,
+      [DSPP_NS]         : "true",
+      [DSPP_STATE]      : compiled,
+      [DSPP_TASK_NAME]  : task_name,
+    };
+    await this.docker_sdk.config_write(task_key, body, labels);
+  }
+
+  async _read_service_remote_state(service_name) {
+    let labels = await this.docker_sdk.service_labels_read(service_name);
+    let state = labels['dspp.state'];
+    if(!state) { //to be deleted
+      let entry = escape(`${this.stack_name}.dspp.${service_name}`);
+      state = (await this.docker_sdk.config_read(entry));
+    }
+    return state || "";
   }
 
   async _write_remote_state(service_name, compiled) {
-    let entry = escape(`${this.stack_name}.dspp.${service_name}`);
-    const labels = {
-      [DOCKER_STACK_NS] : this.stack_name,
-      [DSPP_NS]         : "true",
-    };
-
-    await this.docker_sdk.config_write(entry, compiled, labels);
+    await this.docker_sdk.service_label_write(service_name, DSPP_STATE, compiled);
   }
 
 
@@ -334,6 +353,7 @@ class dspp {
       networks  : isEmpty(stack.networks) ? undefined : stack.networks,
       volumes   : isEmpty(stack.volumes)  ? undefined : stack.volumes,
       services  : isEmpty(stack.services) ? undefined : stack.services,
+      tasks     : isEmpty(stack.tasks)    ? undefined : stack.tasks,
     }), yamlStyle);
 
     const stack_revision = md5(body).substr(0, 5);
@@ -361,15 +381,19 @@ class dspp {
 
     let {out : {version, ...input}, cas} = await this._parse();
 
-    let services_slices = [];
+    let item_slices = [];
     let stack = {version};
 
-    // reading remote states
     let services =  Object.entries(input.services || {});
-    let tasks    =  Object.entries(input.tasks || {});
-    let progress = new ProgressBar('Computing (:total) services [:bar]', {...this.progressOpts, total : services.length});
+    services.forEach(line => line.push('service'));
 
-    for(let [service_name, service] of services) {
+    let tasks    =  Object.entries(input.tasks || {});
+    tasks.forEach(line => line.push('task'));
+
+    let items = [...services, ...tasks];
+    let progress = new ProgressBar('Computing (:total) items [:bar]', {...this.progressOpts, total : items.length});
+
+    for(let [service_name, service, service_type] of items) {
       progress.tick();
 
       if(!filter.test(service_name))
@@ -378,28 +402,14 @@ class dspp {
       let stack_slice = {
         version,
         services : {},
+        tasks    : {},
         configs  : {},
         volumes  : {},
         secrets  : {},
         networks : {},
       };
 
-      stack_slice.services[service_name] = service;
-      if('x-tasks-config' in service) {
-        for(let [, task] of tasks) {
-          for(let config of task.configs || []) {
-            if(input.configs[config.source])
-              stack_slice.configs[config.source] = input.configs[config.source];
-          }
-        }
-      }
-
-      for(let [, task] of Object.entries(service.tasks || {})) {
-        for(let config of task.configs || []) {
-          if(input.configs[config.source])
-            stack_slice.configs[config.source] = input.configs[config.source];
-        }
-      }
+      stack_slice[service_type == "service" ? 'services' : 'tasks'][service_name] = service;
 
       for(let config of service.configs || []) {
         if(input.configs[config.source])
@@ -423,15 +433,16 @@ class dspp {
       }
 
       stack.services = {...stack.services, ...stack_slice.services};
-      stack.configs  = {...stack.configs, ...stack_slice.configs};
+      stack.tasks    = {...stack.tasks,    ...stack_slice.tasks};
+      stack.configs  = {...stack.configs,  ...stack_slice.configs};
       stack.networks = {...stack.networks, ...stack_slice.networks};
-      stack.secrets  = {...stack.secrets, ...stack_slice.secrets};
-      stack.volumes  = {...stack.volumes, ...stack_slice.volumes};
+      stack.secrets  = {...stack.secrets,  ...stack_slice.secrets};
+      stack.volumes  = {...stack.volumes,  ...stack_slice.volumes};
 
-      services_slices.push({service_name, ...this._format(stack_slice)});
+      item_slices.push({service_type, service_name, ...this._format(stack_slice)});
     }
 
-    return {cas, stack, services_slices};
+    return {cas, stack, item_slices};
   }
 
 
@@ -439,13 +450,18 @@ class dspp {
   async _analyze(filter) {
     let tmp = await this._analyze_local(filter);
 
-    let total = (tmp.services_slices || []).length;
+    let total = (tmp.item_slices || []).length;
     let progress = new ProgressBar('Reading (:total) remote services [:bar]', {...this.progressOpts, total});
 
     let remote_stack    = {};
-    for(let {service_name} of (tmp.services_slices || [])) {
+    for(let {service_name, service_type} of (tmp.item_slices || [])) {
       progress.tick();
-      let service_current = await this._read_remote_state(service_name);
+      let service_current;
+      if(service_type == "service")
+        service_current = await this._read_service_remote_state(service_name);
+      if(service_type == "task")
+        service_current = await this._read_task_remote_state(service_name);
+
       let doc = parseDocument(service_current, {merge : true});
       deepMixIn(remote_stack, doc.toJS({maxAliasCount : -1 }));
     }
@@ -476,13 +492,13 @@ class dspp {
     if(filter)
       console.error("Filter stack for '%s'", filter);
 
-    let {compiled, current, stack_revision, services_slices} = await this._analyze(filter);
+    let {compiled, current, stack_revision, item_slices} = await this._analyze(filter);
 
     let result = {stack_revision};
 
     if(filter) {
-      console.error(`Found ${services_slices.length} matching services`);
-      if(!services_slices.length)
+      console.error(`Found ${item_slices.length} matching items`);
+      if(!item_slices.length)
         return result;
     }
 
@@ -542,7 +558,7 @@ class dspp {
 
     let {filter} = this;
 
-    let {cas, stack, compiled, current, services_slices} = await this._analyze(filter);
+    let {cas, stack, compiled, current, item_slices} = await this._analyze(filter);
 
     if(current != compiled && compiled != this.approved)
       return console.error("Change detected, please compile first");
@@ -575,23 +591,8 @@ class dspp {
     for(let [, config] of Object.entries(stack.configs))
       delete config['x-trace'];
 
-    for(let [, service] of Object.entries(stack.services)) {
-      if(!service['tasks']) continue;
-
-      let tasks = service['tasks'];
-      delete service['tasks'];
-
-      for(let [task_name, task] of Object.entries(tasks)) {
-        if(!service.deploy)
-          service.deploy = {};
-        if(!service.deploy.labels)
-          service.deploy.labels = {};
-
-        let body = JSON.stringify({...task, name : task_name});
-        let task_key = 'dspp.tasks.' + md5(body).substr(0, 5);
-        service.deploy.labels[task_key] = body;
-      }
-    }
+    let tasks = stack.tasks;
+    delete stack['tasks'];
 
     ({compiled} = this._format(stack));
 
@@ -606,8 +607,14 @@ class dspp {
     await pipe(stack_contents, child.stdin);
     await wait(child);
 
-    for(let {service_name, compiled} of services_slices)
-      await this._write_remote_state(service_name, compiled);
+    for(let {service_name, compiled, service_type} of item_slices) {
+      if(service_type == "service")
+        await this._write_remote_state(service_name, compiled);
+      if(service_type == "task") {
+        let task = tasks[service_name];
+        await this._write_task_remote_state(service_name, task, compiled);
+      }
+    }
 
     await passthru('docker', ['service', 'ls']);
   }
