@@ -188,11 +188,17 @@ class dspp {
       return obj;
     };
 
+    let tasks = {};
+    //this is legacy to be dropped
     for(let [task_name, task] of Object.entries(out.tasks || {}))
       out.tasks[task_name]  = walk(task, v =>  replaceEnv(v, {...task, task_name, service_name : task_name}));
 
     for(let [service_name, service] of Object.entries(out.services || {})) {
       service = await processEnv(service);
+
+      for(let [task_name, task] of Object.entries(service.tasks || {}))
+        tasks[task_name] = service.tasks[task_name]  = walk(task, v =>  replaceEnv(v, {...task, task_name, service_name : task_name}));
+
       out.services[service_name] = walk(service, v =>  replaceEnv(v, {...service, service_name}));
     }
 
@@ -214,7 +220,7 @@ class dspp {
       delete out.volumes[volume_name];
     }
 
-    for(let obj of Object.values({...out.services, ...out.tasks})) {
+    for(let obj of Object.values({...out.services, ...out.tasks, ...tasks})) {
       for(let volume of obj.volumes || []) {
         if(volumes_map[volume.source])
           volume.source = volumes_map[volume.source];
@@ -270,7 +276,7 @@ class dspp {
 
 
       // this need to be proceseed before 2nd pass
-      for(let obj of Object.values({...out.services, ...out.tasks})) {
+      for(let obj of Object.values({...out.services, ...out.tasks, ...tasks})) {
         if(!obj.configs)
           continue;
         let base = obj.configs || [];
@@ -388,6 +394,13 @@ class dspp {
         }
       }
 
+      for(let [, task] of Object.entries(service.tasks || {})) {
+        for(let config of task.configs || []) {
+          if(input.configs[config.source])
+            stack_slice.configs[config.source] = input.configs[config.source];
+        }
+      }
+
       for(let config of service.configs || []) {
         if(input.configs[config.source])
           stack_slice.configs[config.source] = input.configs[config.source];
@@ -464,6 +477,7 @@ class dspp {
       console.error("Filter stack for '%s'", filter);
 
     let {compiled, current, stack_revision, services_slices} = await this._analyze(filter);
+
     let result = {stack_revision};
 
     if(filter) {
@@ -561,7 +575,26 @@ class dspp {
     for(let [, config] of Object.entries(stack.configs))
       delete config['x-trace'];
 
+    for(let [, service] of Object.entries(stack.services)) {
+      if(!service['tasks']) continue;
+
+      let tasks = service['tasks'];
+      delete service['tasks'];
+
+      for(let [task_name, task] of Object.entries(tasks)) {
+        if(!service.deploy)
+          service.deploy = {};
+        if(!service.deploy.labels)
+          service.deploy.labels = {};
+
+        let body = JSON.stringify({...task, name : task_name});
+        let task_key = 'dspp.tasks.' + md5(body).substr(0, 5);
+        service.deploy.labels[task_key] = body;
+      }
+    }
+
     ({compiled} = this._format(stack));
+
 
     let {cas_path : stack_path} = cas.feed(compiled);
     console.error("Stack file wrote in %s (%s)", stack_path, filter ? `filter ${filter}` : "full stack");
