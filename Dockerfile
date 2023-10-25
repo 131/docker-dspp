@@ -14,4 +14,4 @@ COPY . .
 RUN npm install --production
 WORKDIR /app
 ENTRYPOINT ["/stack.js"]
-LABEL "org.opencontainers.image.version"="8.1.0"
+LABEL "org.opencontainers.image.version"="8.1.1"
