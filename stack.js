@@ -396,6 +396,9 @@ class dspp {
     for(let [service_name, service, service_type] of items) {
       progress.tick();
 
+      if(dict['tasks'] && service_type != "task")
+        continue;
+
       if(!filter.test(service_name))
         continue;
 
