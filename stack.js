@@ -24,7 +24,6 @@ const eachLimit = require('nyks/async/eachLimit');
 const semver     = require('semver');
 const stripStart = require('nyks/string/stripStart');
 const guid       = require('mout/random/guid');
-const get        = require('mout/object/get');
 
 const {dict}  = require('nyks/process/parseArgs')();
 
@@ -307,11 +306,26 @@ class dspp {
     }, stack_guid, cas};
   }
 
+  async _delete_task(task_name) {
+    let id = escape(`${this.stack_name}_tasks.${task_name}`);
+    let res = await this.docker_sdk.request('DELETE', `/configs/${id}`);
+    return res.statusCode;
+  }
+
   async _read_task_remote_state(task_name) {
     let task_key = escape(`${this.stack_name}_tasks.${task_name}`);
-    let config = await this.docker_sdk.configs_list({name : task_key}).then(list => list[0]);
-    let state = (get(config, "Spec.Labels") || {}) [DSPP_STATE] || "";
-    return state;
+    let specs = await this._read_tasks_remote_state({name : task_key});
+    return specs[task_name] || "";
+  }
+
+  async _read_tasks_remote_state(filter = {}) {
+    let configs = await this.docker_sdk.configs_list({label : DSPP_TASK_NAME, ...filter});
+    let states = {};
+    configs.forEach(config => {
+      let {[DSPP_STATE] : state, [DSPP_TASK_NAME] : name} = config.Spec.Labels;
+      states[name] = state;
+    });
+    return states;
   }
 
   async _write_task_remote_state(task_name, task, compiled) {
@@ -453,11 +467,33 @@ class dspp {
   async _analyze(filter) {
     let tmp = await this._analyze_local(filter);
 
-    let total = (tmp.item_slices || []).length;
+    let remote_stack    = {};
+    let orphan_tasks    = [];
+    let prune = !filter;
+
+    const merge = (spec) => {
+      let doc = parseDocument(spec, {merge : true});
+      deepMixIn(remote_stack, doc.toJS({maxAliasCount : -1 }));
+    };
+
+    // when not working with any filter, we can prune orphan
+    if(prune) {
+      console.error("Reading remote tasks state");
+      let tasks = Object.entries(await this._read_tasks_remote_state());
+
+      for(let [task_name, task_spec] of tasks) {
+        if(tmp.item_slices.find(item => item.service_name == task_name))
+          continue;
+        orphan_tasks.push(task_name);
+        merge(task_spec);
+      }
+      // we might want to deal here with orphan services
+    }
+
+    let total = tmp.item_slices.length;
     let progress = new ProgressBar('Reading (:total) remote services [:bar]', {...this.progressOpts, total});
 
-    let remote_stack    = {};
-    for(let {service_name, service_type} of (tmp.item_slices || [])) {
+    for(let {service_name, service_type} of tmp.item_slices) {
       progress.tick();
       let service_current;
       if(service_type == "service")
@@ -465,14 +501,14 @@ class dspp {
       if(service_type == "task")
         service_current = await this._read_task_remote_state(service_name);
 
-      let doc = parseDocument(service_current, {merge : true});
-      deepMixIn(remote_stack, doc.toJS({maxAliasCount : -1 }));
+      merge(service_current);
     }
+
 
     let {compiled : current}       = this._format(remote_stack);
     let {compiled, stack_revision} = this._format(tmp.stack);
 
-    return {...tmp, compiled, stack_revision, current};
+    return {...tmp, compiled, stack_revision, current, orphan_tasks};
   }
 
   //public helper
@@ -561,7 +597,7 @@ class dspp {
 
     let {filter} = this;
 
-    let {cas, stack, compiled, current, item_slices} = await this._analyze(filter);
+    let {cas, stack, compiled, current, item_slices, orphan_tasks} = await this._analyze(filter);
 
     if(current != compiled && compiled != this.approved)
       return console.error("Change detected, please compile first");
@@ -609,6 +645,11 @@ class dspp {
 
     await pipe(stack_contents, child.stdin);
     await wait(child);
+
+    for(let task_name of orphan_tasks) {
+      let res = await this._delete_task(task_name);
+      console.error("Pruning orphan task", task_name, res);
+    }
 
     for(let {service_name, compiled, service_type} of item_slices) {
       if(service_type == "service")
