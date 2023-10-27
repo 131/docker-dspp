@@ -319,7 +319,7 @@ class dspp {
   }
 
   async _read_tasks_remote_state(filter = {}) {
-    let configs = await this.docker_sdk.configs_list({label : DSPP_TASK_NAME, ...filter});
+    let configs = await this.docker_sdk.configs_list({label : DSPP_TASK_NAME, namespace : this.stack_name, ...filter});
     let states = {};
     configs.forEach(config => {
       let {[DSPP_STATE] : state, [DSPP_TASK_NAME] : name} = config.Spec.Labels;
