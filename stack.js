@@ -312,23 +312,24 @@ class dspp {
     return res.statusCode;
   }
 
-  async _read_task_remote_state(task_name) {
+  async _read_task_remote_spec(task_name) {
     let task_key = escape(`${this.stack_name}_tasks.${task_name}`);
-    let specs = await this._read_tasks_remote_state({name : task_key});
-    return specs[task_name] || "";
+    let specs = await this._read_tasks_remote_spec({name : task_key});
+    return (specs[task_name] || {}).spec || "";
   }
 
-  async _read_tasks_remote_state(filter = {}) {
+  async _read_tasks_remote_spec(filter = {}) {
     let configs = await this.docker_sdk.configs_list({label : DSPP_TASK_NAME, namespace : this.stack_name, ...filter});
-    let states = {};
+    let specs = {};
     configs.forEach(config => {
-      let {[DSPP_STATE] : state, [DSPP_TASK_NAME] : name} = config.Spec.Labels;
-      states[name] = state;
+      let {[DSPP_STATE] : spec, [DSPP_TASK_NAME] : name} = config.Spec.Labels;
+      let body = JSON.parse(Buffer.from(config.Spec.Data, 'base64'));
+      specs[name] = { spec, image : body.image, plan : body.plan, id : config.ID};
     });
-    return states;
+    return specs;
   }
 
-  async _write_task_remote_state(task_name, task, compiled) {
+  async _write_task_remote_spec(task_name, task, compiled) {
     let task_key = escape(`${this.stack_name}_tasks.${task_name}`);
     let body = JSON.stringify({...task, name : task_name});
     console.error("Update task %s (id:%s)", task_name, task_key);
@@ -341,17 +342,17 @@ class dspp {
     await this.docker_sdk.config_write(task_key, body, labels);
   }
 
-  async _read_service_remote_state(service_name) {
+  async _read_service_remote_spec(service_name) {
     let labels = await this.docker_sdk.service_labels_read(service_name);
-    let state = labels['dspp.state'];
-    if(!state) { //to be deleted
+    let spec = labels[DSPP_STATE];
+    if(!spec) { //to be deleted
       let entry = escape(`${this.stack_name}.dspp.${service_name}`);
-      state = (await this.docker_sdk.config_read(entry));
+      spec = (await this.docker_sdk.config_read(entry));
     }
-    return state || "";
+    return spec || "";
   }
 
-  async _write_remote_state(service_name, compiled) {
+  async _write_service_remote_spec(service_name, compiled) {
     await this.docker_sdk.service_label_write(service_name, DSPP_STATE, compiled);
   }
 
@@ -479,9 +480,9 @@ class dspp {
     // when not working with any filter, we can prune orphan
     if(prune) {
       console.error("Reading remote tasks state");
-      let tasks = Object.entries(await this._read_tasks_remote_state());
+      let tasks = Object.entries(await this._read_tasks_remote_spec());
 
-      for(let [task_name, task_spec] of tasks) {
+      for(let [task_name, {spec : task_spec}] of tasks) {
         if(tmp.item_slices.find(item => item.service_name == task_name))
           continue;
         orphan_tasks.push(task_name);
@@ -497,9 +498,9 @@ class dspp {
       progress.tick();
       let service_current;
       if(service_type == "service")
-        service_current = await this._read_service_remote_state(service_name);
+        service_current = await this._read_service_remote_spec(service_name);
       if(service_type == "task")
-        service_current = await this._read_task_remote_state(service_name);
+        service_current = await this._read_task_remote_spec(service_name);
 
       merge(service_current);
     }
@@ -653,10 +654,10 @@ class dspp {
 
     for(let {service_name, compiled, service_type} of item_slices) {
       if(service_type == "service")
-        await this._write_remote_state(service_name, compiled);
+        await this.__write_service_remote_spec(service_name, compiled);
       if(service_type == "task") {
         let task = tasks[service_name];
-        await this._write_task_remote_state(service_name, task, compiled);
+        await this._write_task_remote_spec(service_name, task, compiled);
       }
     }
 
@@ -668,6 +669,11 @@ class dspp {
   async version() {
     return this.docker_sdk.version();
   }
+
+  async tasks_ls() {
+    let tasks = await this._read_tasks_remote_spec();
+  }
+
 
   async config_prune() {
     let {stack} = await this._analyze_local(), legitimates = Object.keys(stack.configs);
