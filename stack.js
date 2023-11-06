@@ -654,7 +654,7 @@ class dspp {
 
     for(let {service_name, compiled, service_type} of item_slices) {
       if(service_type == "service")
-        await this.__write_service_remote_spec(service_name, compiled);
+        await this._write_service_remote_spec(service_name, compiled);
       if(service_type == "task") {
         let task = tasks[service_name];
         await this._write_task_remote_spec(service_name, task, compiled);
