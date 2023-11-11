@@ -134,7 +134,7 @@ class dspp {
       }
     }; load(entry_file);
     readline.clearLine(process.stderr, 0);
-    process.stderr.write("\rReady\n");
+    console.error(`\rWorking with stack '%s' from %d files and %d env files`, this.stack_name, this.compose_files.length, this.header_files.length);
 
   }
 
@@ -540,8 +540,12 @@ class dspp {
     let {filter} = this;
 
     let {stack} = await this._analyze_local(filter);
-    let {compiled} = this._format(stack);
+    // strip invalid $ interpolation in x-traces
+    for(let [, config] of Object.entries(stack.configs))
+      delete config['x-trace'];
 
+
+    let {compiled} = this._format(stack);
     return compiled;
   }
 
