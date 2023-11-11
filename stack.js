@@ -24,10 +24,11 @@ const eachLimit = require('nyks/async/eachLimit');
 const semver     = require('semver');
 const stripStart = require('nyks/string/stripStart');
 const guid       = require('mout/random/guid');
+const readline   = require('readline');
 
 const {dict}  = require('nyks/process/parseArgs')();
 
-const {stringify, parse, parseDocument,  Parser, Composer, visit, isAlias} = require('yaml');
+const {stringify, parseDocument,  Parser, Composer, visit, isAlias} = require('yaml');
 
 const DockerSDK = require('@131/docker-sdk');
 const {escape}  = DockerSDK;
@@ -55,64 +56,88 @@ const flatten = obj => JSON.parse(JSON.stringify(obj));
 const SOURCE_FILE = Symbol("x-source-file");
 const CONFIG_NAME = Symbol("x-config-name");
 
+const readFileSync = function(file_path) {
+  let fp = path.resolve(file_path);
+  if(readFileSync[fp])
+    return readFileSync[fp];
+  return readFileSync[fp] = fs.readFileSync(fp, 'utf-8');
+};
+
+
+const laxParser = function(body) {
+  const tokens = new Parser().parse(body);
+  const docs = new Composer({merge : true, uniqueKeys : false}).compose(tokens);
+  return docs.next().value;
+};
+
 class dspp {
 
-  constructor(config_file = null, filter = null) {
+  constructor(entry_file, filter = null) {
     console.error("Hi", `dspp v${DSPP_VERSION}`);
 
-    let config   = {name : "stack"};
 
-    if(!config_file && 'file' in dict) {
-      let {file, header} = dict;
-      config.includes = typeof file == "string" ? [file] : file;
-
-      if(header)
-        (typeof header == "string"  ? [header]  : header).forEach(path => config.includes.push({type : 'header', path}));
+    if(!fs.existsSync(entry_file)) {
+      console.error("No entry file");
+      return;
     }
 
-    if(fs.existsSync(config_file)) {
-      let body = fs.readFileSync(config_file, 'utf-8');
-      config = {name : path.basename(config_file, '.yml'), ...parse(body)};
+    let {dependencies = {}} = require(path.resolve('package.json'));
 
-      let {dependencies = {}} = require(path.resolve('package.json'));
-
-      for(let [module_name, module_version]  of Object.entries(dependencies)) {
-        let {version} = require(require.resolve(`${module_name}/package.json`));
-        if(!semver.satisfies(version, module_version))
-          throw `Unsupported ${module_name} version (requires ${module_version})`;
-      }
+    for(let [module_name, module_version]  of Object.entries(dependencies)) {
+      let {version} = require(require.resolve(`${module_name}/package.json`));
+      if(!semver.satisfies(version, module_version))
+        throw `Unsupported ${module_name} version (requires ${module_version})`;
     }
 
+    this.stack_name    = null;
+    this.header_files  = [];
+    this.compose_files = [];
 
-
-    this.stack_name  = config.name;
-    this.docker_sdk  = new DockerSDK(this.stack_name);
+    let config = laxParser(readFileSync(entry_file));
+    this.stack_name = config.has("name") ? config.get("name") : path.basename(entry_file, '.yml');
 
     let noProgress  = !!dict['no-progress'];
     this.progressOpts = {width : 60, incomplete : ' ', clear : true,  stream : noProgress ? new PassThrough() : process.stderr };
 
-    this.header_files  = [];
-    this.compose_files = [];
-
-    for(let line of config.includes || []) {
-      if(typeof line == 'string')
-        line = {type : 'compose', path : line};
-
-      let type = line.type, path = glob(line.path);
-      if(!path.length)
-        console.error("Empty expansion from", line.path);
-
-      if(type == "header")
-        this.header_files.push(...path);
-      if(type == "compose")
-        this.compose_files.push(...path);
-    }
-
-    if(fs.existsSync(config_file))
-      this.compose_files.push(config_file);
-
+    this.docker_sdk  = new DockerSDK(this.stack_name);
     this.filter   = filter;
+
+
+    process.stderr.write("Parsing entries");
+    const load = (file_path) => {
+      readline.clearLine(process.stderr, 0);
+      process.stderr.write(`\rParsing ${file_path}`);
+
+      if(this.compose_files.includes(file_path))
+        return;
+
+      this.compose_files.push(file_path);
+      let config = laxParser(readFileSync(file_path));
+
+      if(!config.has("includes"))
+        return;
+
+      for(let line of config.get("includes").items || []) {
+        line = line.toJSON();
+
+        if(typeof line == "string")
+          line = {type : 'compose', path : line};
+
+        let type = line.type, paths = glob(line.path, {absolute : true, cwd : path.dirname(file_path)});
+        if(!paths.length)
+          console.error("Empty expansion from", line.path);
+
+        if(type == "header")
+          this.header_files.push(...paths);
+        if(type == "compose")
+          paths.forEach(load, this);
+      }
+    }; load(entry_file);
+    readline.clearLine(process.stderr, 0);
+    process.stderr.write("\rReady\n");
+
   }
+
 
   async _parse() {
 
@@ -121,7 +146,7 @@ class dspp {
 
     let env = '';
     for(let header_file of header_files)
-      env += fs.readFileSync(header_file, 'utf-8') + `\n`;
+      env += readFileSync(header_file) + `\n`;
 
     let stack = '';
     let out = {};
@@ -132,7 +157,7 @@ class dspp {
 
 
     for(let compose_file of compose_files || []) {
-      let body = env + fs.readFileSync(compose_file, 'utf-8');
+      let body = env + readFileSync(compose_file);
       stack += `${body}\n---\n`;
       progress.tick();
 
@@ -144,9 +169,7 @@ class dspp {
         body = Function('{ctx}', "return `" + body + "`;").call(null, {ctx});
         body = body.replace(new RegExp(token, "g"), '$$$${'); // $ is a special replacement char
 
-        const tokens = new Parser().parse(body);
-        const docs = new Composer({merge : true, uniqueKeys : false}).compose(tokens);
-        let doc = docs.next().value;
+        let doc = laxParser(body);
 
         //custom behavior for non alias merges
         visit(doc, (key, node, path) => {
@@ -697,11 +720,9 @@ class dspp {
     let replaced = false;
 
     for(let compose_file of this.compose_files) {
-      let body = fs.readFileSync(compose_file, 'utf8');
+      let body = readFileSync(compose_file);
 
-      const tokens = new Parser().parse(body);
-      const docs = new Composer({merge : true}).compose(tokens);
-      let doc = docs.next().value;
+      let doc = laxParser(body);
 
       if(doc.hasIn(path)) {
         doc.setIn(path, value);
