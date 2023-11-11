@@ -60,14 +60,14 @@ class dspp {
   constructor(config_file = null, filter = null) {
     console.error("Hi", `dspp v${DSPP_VERSION}`);
 
-    let config   = {files : [], name : "stack"};
+    let config   = {name : "stack"};
 
     if(!config_file && 'file' in dict) {
       let {file, header} = dict;
-      config.files = typeof file == "string" ? [file] : file;
+      config.includes = typeof file == "string" ? [file] : file;
 
       if(header)
-        (typeof header == "string"  ? [header]  : header).forEach(path => config.files.push({type : 'header', path}));
+        (typeof header == "string"  ? [header]  : header).forEach(path => config.includes.push({type : 'header', path}));
     }
 
     if(fs.existsSync(config_file)) {
@@ -91,10 +91,10 @@ class dspp {
     let noProgress  = !!dict['no-progress'];
     this.progressOpts = {width : 60, incomplete : ' ', clear : true,  stream : noProgress ? new PassThrough() : process.stderr };
 
-    this.header_files = config.header_files || [];
-    this.compose_files = config.compose_files || [];
+    this.header_files  = [];
+    this.compose_files = [];
 
-    for(let line of config.files || []) {
+    for(let line of config.includes || []) {
       if(typeof line == 'string')
         line = {type : 'compose', path : line};
 
@@ -671,7 +671,7 @@ class dspp {
   }
 
   async tasks_ls() {
-    let tasks = await this._read_tasks_remote_spec();
+    return this._read_tasks_remote_spec();
   }
 
 

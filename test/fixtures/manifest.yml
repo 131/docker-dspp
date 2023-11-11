@@ -1,6 +1,6 @@
 name: dspp-stack
 
-files:
+includes:
   - type: header
     path: env/macros.yml
 
