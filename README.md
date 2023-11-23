@@ -56,7 +56,7 @@ dspp production.yml service_name --ir://run=plan --commit --ir://run=apply
 ## Commands list
 
 ```
-Hi dspp v8.1.4
+Hi dspp v9.0.2
 ╔═══════════════════════════════════ `runner` commands list ═══════════════════════════════════╗
 ║list_commands (?)                                               Display all available commands║
 ║quit (q)                                                                                      ║
@@ -93,9 +93,15 @@ dspp production.yml --ir://run=config_prune
 
 This command has no need for the Docker socket.
 
+The `write` parameter instructs `dspp` to keep a copy of the parsed stack on disk in the `.cas` folder, with a unique file name. This is what `apply` would also do before calling `docker stack deploy`. Be advised that this parameter won't tell you where the file was written on disk, you'll have to find it with a separate command.
+
 Automate with:
 ```yml
-dspp production.yml --ir://run=parse --ir://raw > production.flat.yml
+# output the parsed stack and redirect to a YAML file of your choice
+dspp production.yml --ir://raw --ir://run=parse > production.flat.yml
+# output the parsed stack and write a copy on disk, then find out which file that was
+dspp production.yml --ir://raw --ir://run=parse --write
+find .docker-stack/.cas -mmin -5 -type f -ls
 ```
 
 ### "plan" command: prepare the compose file and diff against the running stack
@@ -157,7 +163,7 @@ npm install -g dspp
 # However if you handle multiple stacks, you probably want one dspp version per project
 cat package.json | jq -r ".dependencies"
 {
-  "dspp": "^8.1.4"
+  "dspp": "^9.0.2"
 }
 npm install
 ./node_modules/.bin/dspp my-stack.yml
@@ -200,7 +206,7 @@ which dspp || export PATH="./node_modules/.bin:$PATH"
 ```yml
 name: my-stack
 
-files:
+includes:
   - services/service1.yml
 ```
 
@@ -214,7 +220,7 @@ files:
   "author": "",
   "license": "",
   "dependencies": {
-    "dspp": "^8.1.4"
+    "dspp": "^9.0.2"
   },
   "devDependencies": {}
 }
@@ -233,7 +239,7 @@ services:
 Out of curiosity, you can output the parsed compose file:
 ```yaml
 $ dspp my-stack.yml --ir://run=parse --ir://raw 2>/dev/null
-# my-stack @58464 (dspp v8.1.4)
+# my-stack @58464 (dspp v9.0.2)
 version: "3.3"
 services:
   service1:
@@ -243,7 +249,7 @@ services:
 Now deploy this compose file, either interactively or like this:
 ```bash
 $ dspp my-stack.yml --ir://run=plan --commit --ir://run=apply --ir://raw
-Hi dspp v8.1.4
+Hi dspp v9.0.2
 Working with stack 'my-stack' from 2 files and 0 env files
 Reading remote tasks state
 diff --git a/tmp/current-v2bUqHHM.current b/-
@@ -251,7 +257,7 @@ index a3197a0e0..000000000 100644
 --- a/tmp/current-v2bUqHHM.current
 +++ b/-
 @@ -1,1676 +1,5 @@
-+# my-stack @58464 (dspp v8.1.4)
++# my-stack @58464 (dspp v9.0.2)
 +version: "3.3"
 +services:
 +  service1:
@@ -281,7 +287,7 @@ Reference it from your dspp stack file:
 ```yml
 name: my-stack
 
-files:
+includes:
   - services/service1.yml
   - services/service2.yml
 ```
@@ -290,7 +296,7 @@ files:
 ```yml
 name: my-stack
 
-files:
+includes:
   - services/*.yml
 ```
 
@@ -298,7 +304,7 @@ If you are curious about the updated compose file:
 
 ```yaml
 $ dspp my-stack.yml --ir://run=parse --ir://raw 2>/dev/null
-# my-stack @282ec (dspp v8.1.4)
+# my-stack @282ec (dspp v9.0.2)
 version: "3.3"
 services:
   service1:
@@ -310,7 +316,7 @@ services:
 Then deploy again:
 ```bash
 $ dspp my-stack.yml --ir://run=plan --commit --ir://run=apply --ir://raw
-Hi dspp v8.1.4
+Hi dspp v9.0.2
 Working with stack 'my-stack' from 3 files and 0 env files
 Reading remote tasks state
 diff --git a/tmp/current-9gWSOOC2.current b/-
@@ -318,8 +324,8 @@ index 5d3507364..000000000 100644
 --- a/tmp/current-9gWSOOC2.current
 +++ b/-
 @@ -1,5 +1,7 @@
--# my-stack @58464 (dspp v8.1.4)
-+# my-stack @282ec (dspp v8.1.4)
+-# my-stack @58464 (dspp v9.0.2)
++# my-stack @282ec (dspp v9.0.2)
  version: "3.3"
  services:
    service1:
@@ -363,14 +369,14 @@ services:
   "author": "",
   "license": "",
   "dependencies": {
-    "dspp": "^8.1.4"
+    "dspp": "^9.0.2"
   },
   "devDependencies": {}
 }
 ./my-stack.yml
 name: my-stack
 
-files:
+includes:
   - services/service1.yml
   - services/service2.yml
 ```
@@ -420,7 +426,7 @@ services:
 ```yml
 name: my-stack
 
-files:
+includes:
   - env/configs.yml
 
   - services/service1.yml
@@ -428,7 +434,7 @@ files:
 
 ```yaml
 $ dspp my-stack.yml --ir://run=parse --ir://raw 2>/dev/null
-# my-stack @0f9b9 (dspp v8.1.4)
+# my-stack @0f9b9 (dspp v9.0.2)
 version: "3.3"
 configs:
   file1-3bc34:
@@ -445,7 +451,7 @@ services:
 
 ```bash
 $ dspp my-stack.yml --ir://run=plan --commit --ir://run=apply --ir://raw
-Hi dspp v8.1.4
+Hi dspp v9.0.2
 Working with stack 'my-stack' from 3 files and 0 env files
 Reading remote tasks state
 diff --git a/tmp/current-jV4Jt+p+.current b/-
@@ -453,8 +459,8 @@ index 5d3507364..000000000 100644
 --- a/tmp/current-jV4Jt+p+.current
 +++ b/-
 @@ -1,5 +1,11 @@
--# my-stack @58464 (dspp v8.1.4)
-+# my-stack @8e447 (dspp v8.1.4)
+-# my-stack @58464 (dspp v9.0.2)
++# my-stack @8e447 (dspp v9.0.2)
  version: "3.3"
 +configs:
 +  file1-3bc34:
@@ -585,7 +591,7 @@ services:
 ```bash
 # filtered on service1 for ease of reading
 $ dspp my-stack.yml service1 --ir://run=parse --ir://raw 2>/dev/null
-# my-stack @0c8b5 (dspp v8.1.4)
+# my-stack @0c8b5 (dspp v9.0.2)
 version: "3.3"
 configs:
   ssh-host-key-05fca:
@@ -622,7 +628,7 @@ lorem ipsum
 Let's reuse the example from config type: "file"
 ```yaml
 $ dspp my-stack.yml --ir://run=parse --ir://raw 2>/dev/null
-# my-stack @71d73 (dspp v8.1.4)
+# my-stack @71d73 (dspp v9.0.2)
 version: "3.3"
 configs:
   file1-3bc34:
@@ -651,7 +657,7 @@ configs:
 
 ```yaml
 $ dspp my-stack.yml --ir://run=parse --ir://raw 2>/dev/null
-# my-stack @f6580 (dspp v8.1.4)
+# my-stack @f6580 (dspp v9.0.2)
 version: "3.3"
 configs:
   file1-3bc34:
@@ -702,7 +708,7 @@ services:
 
 ```yaml
 $ dspp my-stack.yml --ir://run=parse --ir://raw 2>/dev/null
-# my-stack @a47af (dspp v8.1.4)
+# my-stack @a47af (dspp v9.0.2)
 version: "3.3"
 services:
   service1:
@@ -768,7 +774,7 @@ services:
 ```yaml
 name: my-stack
 
-files:
+includes:
   - type: header
     path: env/macros.yml
 
@@ -778,7 +784,7 @@ files:
 
 ```yaml
 $ dspp my-stack.yml --ir://run=parse --ir://raw 2>/dev/null
-# my-stack @93acf (dspp v8.1.4)
+# my-stack @93acf (dspp v9.0.2)
 version: "3.3"
 services:
   service1:
@@ -807,7 +813,7 @@ Meant for automated CLI usage (CI tooling & co).
 
 ### flag: "--debug"
 
-Available by accessing `${ctx.debug}` in the YAML files: this is actually a JavaScript syntax that allows switching features on/off within YAML files. This works because `dspp` reads each YAML file as a JavaScript Literal.
+Available by accessing `${ctx.debug}` in the YAML includes: this is actually a JavaScript syntax that allows switching features on/off within YAML files. This works because `dspp` reads each YAML file as a JavaScript Literal.
 
 For this example, we'll use it to toggle the debug feature in the nginx service (taken from the basic example above).
 
@@ -834,7 +840,7 @@ services:
 
 ```yaml
 $ dspp my-stack.yml --ir://run=parse --ir://raw 2>/dev/null
-# my-stack @282ec (dspp v8.1.4)
+# my-stack @282ec (dspp v9.0.2)
 version: "3.3"
 services:
   service1:
@@ -844,7 +850,7 @@ services:
 ```
 ```yaml
 $ dspp my-stack.yml --debug --ir://run=parse --ir://raw 2>/dev/null
-# my-stack @9fab8 (dspp v8.1.4)
+# my-stack @9fab8 (dspp v9.0.2)
 version: "3.3"
 services:
   service1:
@@ -874,7 +880,7 @@ In this example, the main stack file is called `production.yml` and it includes 
   "author": "",
   "license": "",
   "dependencies": {
-    "dspp": "^8.1.4"
+    "dspp": "^9.0.2"
   },
   "devDependencies": {}
 }
@@ -884,7 +890,7 @@ In this example, the main stack file is called `production.yml` and it includes 
 ```yaml
 name: my-stack
 
-files:
+includes:
   - services/service1.yml
 ```
 
@@ -904,7 +910,7 @@ services:
 ```yaml
 name: devel-stack
 
-files:
+includes:
   - services/service1.yml
   - devel/services/service1-override.yml
 ```
@@ -923,7 +929,7 @@ services:
 Let's build the "production" stack:
 ```yaml
 $ dspp production.yml --ir://run=parse --ir://raw 2>/dev/null
-# my-stack @58464 (dspp v8.1.4)
+# my-stack @58464 (dspp v9.0.2)
 version: "3.3"
 services:
   service1:
@@ -936,7 +942,7 @@ And here is what happens with the "devel" stack:
 
 ```yaml
 $ dspp devel/devel.yml --ir://run=parse --ir://raw 2>/dev/null
-# devel-stack @2d144 (dspp v8.1.4)
+# devel-stack @2d144 (dspp v9.0.2)
 version: "3.3"
 services:
   service1:
@@ -949,7 +955,7 @@ services:
 Let's deploy both stacks and see what happens.
 ```
 $ dspp production.yml --ir://run=plan --commit --ir://run=apply
-Hi dspp v8.1.4
+Hi dspp v9.0.2
 ╔═══════════════════════════════════ `runner` commands list ═══════════════════════════════════╗
 ║list_commands (?)                                               Display all available commands║
 ║quit (q)                                                                                      ║
@@ -980,7 +986,7 @@ z2y8nsf5oh3w        my-stack_service1                                           
 
 ```
 $ dspp devel/devel.yml --ir://run=plan --commit --ir://run=apply
-Hi dspp v8.1.4
+Hi dspp v9.0.2
 ╔═══════════════════════════════════ `runner` commands list ═══════════════════════════════════╗
 ║list_commands (?)                                               Display all available commands║
 ║quit (q)                                                                                      ║
@@ -1107,7 +1113,7 @@ This entire object merging feature is global to YAML and isn't specific to Compo
 $ cat my-stack.yml && ls -alh services
 name: my-stack
 
-files:
+includes:
   - services/foo.yml
 total 12K
 drwxr-xr-x 2 root root 4.0K Nov  2 11:10 .
@@ -1116,17 +1122,17 @@ drwxr-xr-x 4 root root 4.0K Nov  2 11:10 ..
 ```
 ```
 $ dspp my-stack.yml --ir://run=parse --ir://raw
-Hi dspp v8.1.4
+Hi dspp v9.0.2
 Empty expansion from services/foo.yml
-# my-stack @8a805 (dspp v8.1.4)
+# my-stack @8a805 (dspp v9.0.2)
 {}
 ```
 
 # Tips
 
-Find the raw files for the latest changes:
+Find the CAS files with the latest changes:
 ```bash
-$ find .docker-stack/.cas -mmin -60 -type f | xargs ls -alh
+$ find .docker-stack/.cas -mmin -60 -type f -ls
 ```
 
 Replay a diff between two versions:
