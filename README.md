@@ -68,7 +68,7 @@ See all available commands in [Commands docs](./docs/CLI_COMMANDS.md).
 
 
 # Installation instructions
-```
+```bash
 
 # requires git, most & colordiff
 apt-get install git most colordiff
