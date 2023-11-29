@@ -93,15 +93,14 @@ dspp production.yml --ir://run=config_prune
 
 This command has no need for the Docker socket.
 
-The `write` parameter instructs `dspp` to keep a copy of the parsed stack on disk in the `.cas` folder, with a unique file name. This is what `apply` would also do before calling `docker stack deploy`. Be advised that this parameter won't tell you where the file was written on disk, you'll have to find it with a separate command.
+The `write` parameter instructs `dspp` to write on disk all the files required by the current filter. This is what `apply` would also do before calling `docker stack deploy`.
 
 Automate with:
 ```yml
 # output the parsed stack and redirect to a YAML file of your choice
 dspp production.yml --ir://raw --ir://run=parse > production.flat.yml
-# output the parsed stack and write a copy on disk, then find out which file that was
-dspp production.yml --ir://raw --ir://run=parse --write
-find .docker-stack/.cas -mmin -5 -type f -ls
+# deploy the stack (replace StackName with our own)
+dspp production.yml --ir://raw --ir://run=parse --write | docker stack deploy StackName -
 ```
 
 ### "plan" command: prepare the compose file and diff against the running stack
@@ -505,34 +504,8 @@ configs:
     directory: ./foobar
 ```
 
-### config type: "ksconfig"
-
-Requires the `ksconfig` NodeJS dependency.
-
-This is specific to applications using the Yks framework. This config type reads an XML file with a `ks_config` root element, parses its dependency tree and outputs a flattened file, available as a config name (here the example is `ksconfig1`).
-
-Change the `cwd` if the actual XML entrypoint is located in a different folder.
-
-Change entries to `env` to have them available as expandable variables inside the XML files, for example here `$FOO` or `${FOO}` would be replaced by `bar`.
-
-`env/configs.yml`
-```
-version: "3.3"
-
-configs:
-
-  ksconfig1:
-    require: ksconfig
-    args:
-      entrypoint: ./config/site-name.xml
-      # cwd: ./
-      env:
-        FOO: bar
-```
 
 ### config type: "bundle"
-
-Requires the `dspp-authorized_keys` NodeJS dependency.
 
 This is meant to facilitate sharing of configs that are made of several files with complex options (for example a chmod), and to get around YAML array merging limitations. Macros can't help much in this respect.
 
