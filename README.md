@@ -33,6 +33,17 @@ dspp allows you to split your compose file, define YAML macros/anchor, use servi
 
 ## Basic examples
 
+`production.yml`
+```yaml
+version: "3.3"
+
+name: my-stack
+
+services:
+  service1:
+    image: httpd:2.4
+```
+
 On the entire stack:
 ```bash
 # interactive session
@@ -41,6 +52,8 @@ dspp production.yml
 dspp production.yml --ir://run=parse
 # deploy full stack
 dspp production.yml --ir://run=plan --commit --ir://run=apply
+# alternatively
+dspp production.yml --ir://raw --ir://run=parse --write | docker stack deploy --compose-file - my-stack
 ```
 
 On a specific service in the stack:
@@ -99,8 +112,8 @@ Automate with:
 ```yml
 # output the parsed stack and redirect to a YAML file of your choice
 dspp production.yml --ir://raw --ir://run=parse > production.flat.yml
-# deploy the stack (replace StackName with our own)
-dspp production.yml --ir://raw --ir://run=parse --write | docker stack deploy StackName -
+# deploy the stack (replace "my-stack" with our own stack name)
+dspp production.yml --ir://raw --ir://run=parse --write | docker stack deploy --compose-file - my-stack
 ```
 
 ### "plan" command: prepare the compose file and diff against the running stack
