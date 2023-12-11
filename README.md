@@ -6,12 +6,6 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](http://opensource.org/licenses/MIT)
 
 
-# Docker usage example
-
-```
-cd /your/stack/path
-docker run -it --rm  -v .:/app 131hub/dspp production.yml
-```
 
 # Motivation
 Complex docker stack will be composed out of dozen/hundreds of microservices, volumes, and config.
