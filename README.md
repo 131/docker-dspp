@@ -40,22 +40,18 @@ On the entire stack:
 ```bash
 # interactive session
 dspp production.yml
-# verify all updates
-dspp production.yml --ir://run=parse
-# deploy full stack
-dspp production.yml --ir://run=plan --commit --ir://run=apply
+
+# then use "plan" and "apply" command in the interactive session
+
 # alternatively
 dspp production.yml --ir://raw --ir://run=parse --write | docker stack deploy --compose-file - my-stack
 ```
 
 On a specific service in the stack:
 ```bash
-# interactive session
+# Use
 dspp production.yml service1
-# verify local update
-dspp production.yml service1 --ir://run=parse
-# deploy service only
-dspp production.yml service1 --ir://run=plan --commit --ir://run=apply
+# to work only on the specific "service1" service
 ```
 
 See all available commands in [Commands docs](./docs/CLI_COMMANDS.md).
@@ -73,7 +69,7 @@ npx dspp my-stack.yml
 
 # The dspp stack file: syntax and examples
 
-The [dspp stack file](./docs/SYNTAX_STACK_FILE.md) is a meta file written in YAML and describing how to compile the stack. It is in fact just a list of YAML files to merge.
+The [dspp stack file](./docs/SYNTAX_STACK_FILE.md) is classic compose file that can include / reference other ones, to compile all them in a stack.
 
 To add [configs](./docs/SYNTAX_CONFIGS.md) and other native Compose Spec elements to your services, follow the same rules as the services. Split them into individual files, reference them in your dspp stack file, and redeploy.
 
@@ -88,39 +84,6 @@ To add [configs](./docs/SYNTAX_CONFIGS.md) and other native Compose Spec element
 
 [YAML object merging: overrides, or how to set up qa/staging/local alternate stacks](./docs/ADVANCED_MERGING.md)
 
-
-
-# Troubleshooting
-
-## The stack file lists a file that isn't on the file system
-```
-$ cat my-stack.yml && ls -alh services
-name: my-stack
-
-includes:
-  - services/foo.yml
-total 12K
-drwxr-xr-x 2 root root 4.0K Nov  2 11:10 .
-drwxr-xr-x 4 root root 4.0K Nov  2 11:10 ..
--rw-r--r-- 1 root root   60 Nov  2 11:07 bar.yml
-```
-```
-$ dspp my-stack.yml --ir://run=parse --ir://raw
-Hi dspp v9.0.0
-Empty expansion from services/foo.yml
-# my-stack @8a805 (dspp v9.0.0)
-{}
-```
-
-## Dropping the entire stack
-
-When in doubt, starting over is a simple matter of dropping the entire stack:
-```bash
-$ docker stack rm my-stack
-Removing service my-stack_service1
-Removing service my-stack_service2
-Removing network my-stack_default
-```
 
 
 # Credits
