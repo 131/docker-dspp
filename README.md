@@ -6,6 +6,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](http://opensource.org/licenses/MIT)
 
 
+
 # Motivation
 Complex docker stack will be composed out of dozen/hundreds of microservices, volumes, and config.
 Wrapping all of them in a single compose file is tedious, and lacks flexibility.
@@ -66,32 +67,7 @@ See all available commands in [Commands docs](./docs/CLI_COMMANDS.md).
 # requires git, most & colordiff
 apt-get install git most colordiff
 
-# Install using npm globally
-npm install -g dspp
-
-# However if you handle multiple stacks, you probably want one dspp version per project
-cat package.json | jq -r ".dependencies"
-{
-  "dspp": "^9.0.0"
-}
-npm install
-./node_modules/.bin/dspp my-stack.yml
-
-# for ease of use (choose one):
-alias dspp="./node_modules/.bin/dspp"
-dspp my-stack.yml
-# or:
-PATH="./node_modules/.bin:$PATH"
-dspp my-stack.yml
-
-
-# Install npm using
-
-# default is 2.15.5
-# export npm_install=7.11.2
-
-curl -L https://131.github.io/docker-dspp/install-npm.sh |  sh
-
+npx dspp my-stack.yml
 ```
 
 

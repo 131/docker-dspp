@@ -10,6 +10,10 @@ const Progress = require('progress');
 const drain    = require('nyks/stream/drain');
 const request =  require('nyks/http/request');
 const walk       = require('nyks/object/walk');
+
+const wait = require('nyks/child_process/wait');
+const spawn =  require('child_process').spawn;
+
 const glob       = require('glob').sync;
 
 const yaml = require('yaml');
@@ -62,10 +66,18 @@ class Cas {
   async * config(config_map, config_name, config, source_file, target = "") {
 
     let config_body;
-    let {file, args, bundle, require : require_file, contents, format, directory, 'x-trace' : trace = true} = config;
+    let wd = path.dirname(source_file);
+    let {file, args, exec, bundle, require : require_file, contents, format, directory, 'x-trace' : trace = true} = config;
+
+    if(exec) {
+      let script = path.resolve(wd, exec);
+      let child = spawn(script);
+      ([, contents] = await Promise.all([wait(child), drain(child.stdout)]));
+      contents = String(contents);
+    }
 
     if(require_file) {
-      let file_path, wd = path.dirname(source_file);
+      let file_path;
       if(!Array.isArray(args))
         args = [args];
 
@@ -101,8 +113,6 @@ class Cas {
     }
 
     if(directory) {
-      let wd = path.dirname(source_file);
-
       let dir_path = path.resolve(wd, directory);
 
       if(!dir_path.startsWith(here))
@@ -123,7 +133,6 @@ class Cas {
     }
 
     if(file) {
-      let wd = path.dirname(source_file);
       let file_path = path.resolve(wd, file);
 
       if(!file_path.startsWith(here))
