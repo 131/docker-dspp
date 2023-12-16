@@ -2,7 +2,13 @@
 
 To add configs and other native Compose Spec elements to your services, follow the same rules as the services. Split them into individual files, reference them in your dspp stack file, and redeploy.
 
-### config type: "file"
+## config type: "exec"
+## config type: "require"
+## config type: "contents"
+### config format yml/json
+
+
+## config type: "file"
 
 This is the simplest config type. It maps one file as a named config in the stack, and that config can be mounted into the service's containers.
 
@@ -103,7 +109,7 @@ tmpfs on /usr/local/apache2/htdocs/plain.txt type tmpfs (ro,relatime)
 ```
 
 
-### config type: "directory"
+## config type: "directory"
 
 This config type makes an entire folder available as one config name (here the example is `folder1`).
 
@@ -118,7 +124,7 @@ configs:
 ```
 
 
-### config type: "bundle"
+## config type: "bundle"
 
 This is meant to facilitate sharing of configs that are made of several files with complex options (for example a chmod), and to get around YAML array merging limitations. Macros can't help much in this respect.
 
@@ -198,7 +204,7 @@ services:
     image: httpd:2.4
 ```
 
-### Config standalone parsing
+## Config standalone parsing
 
 This is meant for use cases where the config is described as a script, perhaps with network fetches and so on, which can take a while to run in the middle of a deployment.
 
@@ -209,7 +215,7 @@ $ dspp my-stack.yml --ir://run=config --config_name=file1 --ir://raw 2>/dev/null
 lorem ipsum
 ```
 
-### Config tracing: x-trace
+## Config tracing: x-trace
 
 Let's reuse the example from config type: "file"
 ```yaml
