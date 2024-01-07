@@ -1,13 +1,5 @@
 "use strict";
 
-const debug = require('debug');
-
-const logger = {
-  error: debug('dspp:error'),
-  debug: debug('dspp:debug'),
-  info: debug('dspp:info'),
-};
-
 const path = require('path');
 const fs = require('fs');
 
