@@ -2,3 +2,5 @@
 /node_modules
 /coverage
 /disc
+package-lock.json
+
