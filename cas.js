@@ -143,7 +143,7 @@ class Cas {
         trace = config_body;
     }
 
-    if(contents) {
+    if(contents !== undefined) {
       if(args)
         contents = walk(contents, v =>  replaceEnv(v, args));
       if(format == "json")
