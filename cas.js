@@ -126,7 +126,7 @@ class Cas {
       for(let file of files) {
         let fp = path.join(directory, file), ctx = md5(fp).substr(0, 4);
         progress.tick();
-        for await(const conf of this.config(config_map, `${config_name}_${ctx}`, {file : fp, 'x-trace' : trace}, source_file, `/${file}`))
+        for await(const conf of this.config(config_map, `${config_name}_${ctx}`, {file : fp, 'x-trace' : trace, args}, source_file, `/${file}`))
           yield conf;
       }
       return;
@@ -138,9 +138,7 @@ class Cas {
       if(!file_path.startsWith(here))
         file_path = path.join(here, file_path);
 
-      config_body = fs.readFileSync(file_path, 'utf-8');
-      if(trace)
-        trace = config_body;
+      contents = fs.readFileSync(file_path, 'utf-8');
     }
 
     if(contents !== undefined) {

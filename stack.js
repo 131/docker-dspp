@@ -75,7 +75,6 @@ class dspp {
   constructor(entry_file, filter = null) {
     console.error("Hi", `dspp v${DSPP_VERSION}`);
 
-
     if(!fs.existsSync(entry_file)) {
       console.error("No entry file");
       return;
@@ -96,7 +95,7 @@ class dspp {
     let config = laxParser(readFileSync(entry_file));
     this.stack_name = config.has("name") ? config.get("name") : path.basename(entry_file, '.yml');
 
-    let noProgress  = !!dict['no-progress'];
+    let noProgress  = !!(dict['no-progress'] || dict['cli://unattended']);
     this.progressOpts = {width : 60, incomplete : ' ', clear : true,  stream : noProgress ? new PassThrough() : process.stderr };
 
     this.docker_sdk  = new DockerSDK(this.stack_name);
@@ -588,7 +587,7 @@ class dspp {
 
 
     if(commit) {
-      await shellExec(`cat "${next}" | git diff --no-index --color "${before}" - 1>&2 | cat`);
+      await shellExec(`cat "${next}" | git --no-pager diff --no-index --color "${before}" - 1>&2 || true`);
       return approve();
     }
 
