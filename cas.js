@@ -93,7 +93,7 @@ class Cas {
         let doc = parseDocument(body, {merge : true});
         contents = doc.toJS({maxAliasCount : -1 });
       } else {
-        let largs = Array.isArray(args) ? [args] : args;
+        let largs = Array.isArray(args) ? args : [args];
         let script = require(file_path);
         contents = typeof script == "function" ? await script({...ctx, wd, source_file}, ...largs) : script;
       }
