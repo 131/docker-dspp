@@ -18,8 +18,10 @@ const glob       = require('glob').sync;
 
 const yaml = require('yaml');
 
-const {stringify, parseDocument} = yaml;
+const {stringify : yamlStringify, parseDocument} = yaml;
 const yamlStyle = {singleQuote : false, lineWidth : 0};
+
+const { stringify : tomlStringify } = require('@iarna/toml');
 
 const replaceEnv = require('./replaceEnv');
 
@@ -145,7 +147,9 @@ class Cas {
       if(format == "json")
         config_body = JSON.stringify(contents, null, 2);
       else if(format == "yaml")
-        config_body = stringify(contents, yamlStyle);
+        config_body = yamlStringify(contents, yamlStyle);
+      else if(format == "toml")
+        config_body = tomlStringify(contents, yamlStyle);
       else
         config_body = String(contents);
 
