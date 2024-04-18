@@ -132,15 +132,6 @@ class Cas {
       return;
     }
 
-    if(file) {
-      let file_path = path.resolve(wd, file);
-
-      if(!file_path.startsWith(here))
-        file_path = path.join(here, file_path);
-
-      contents = fs.readFileSync(file_path, 'utf-8');
-    }
-
     if(contents !== undefined) {
       if(args)
         contents = walk(contents, v =>  replaceEnv(v, args));
@@ -156,6 +147,19 @@ class Cas {
       if(trace)
         trace = contents;
     }
+
+    if(file) {
+      let file_path = path.resolve(wd, file);
+
+      if(!file_path.startsWith(here))
+        file_path = path.join(here, file_path);
+
+      config_body = fs.readFileSync(file_path, 'utf-8');
+
+      if(trace)
+        trace = config_body;
+    }
+
 
     if(config_body == undefined)
       throw `No body for config '${config_name}'`;
