@@ -307,8 +307,10 @@ class dspp {
             obj.configs.push(config);
             continue;
           }
-          for(let line of config_map[config.source])
-            obj.configs.push({...config, target : `${config.target}${line.target}`, source : line.cas_name, mode : config.mode || line.mode});
+          for(let line of config_map[config.source]) {
+            let target = line.target ? path.join(config.target, line.target) : config.target;
+            obj.configs.push({...config, target, source : line.cas_name, mode : config.mode || line.mode});
+          }
         }
       }
     }
