@@ -369,10 +369,6 @@ class dspp {
   async _read_service_remote_spec(service_name) {
     let labels = await this.docker_sdk.service_labels_read(service_name);
     let spec = labels[DSPP_STATE];
-    if(!spec) { //to be deleted
-      let entry = escape(`${this.stack_name}.dspp.${service_name}`);
-      spec = (await this.docker_sdk.config_read(entry));
-    }
     return spec || "";
   }
 
