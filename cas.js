@@ -155,6 +155,8 @@ class Cas {
         file_path = path.join(here, file_path);
 
       config_body = fs.readFileSync(file_path, 'utf-8');
+      if(args)
+        config_body = walk(config_body, v =>  replaceEnv(v, args));
 
       if(trace)
         trace = config_body;
