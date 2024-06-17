@@ -21,6 +21,7 @@ const wait       = require('nyks/child_process/wait');
 const pipe       = require('nyks/stream/pipe');
 const passthru   = require('nyks/child_process/passthru');
 const eachLimit = require('nyks/async/eachLimit');
+const ns         = require('mout/object/namespace');
 const semver     = require('semver');
 const stripStart = require('nyks/string/stripStart');
 const guid       = require('mout/random/guid');
@@ -648,15 +649,24 @@ class dspp {
         }
       }
 
-      if(stripped) {
+      if(stripped)
         console.error("Stripped %d existing configs from stack", stripped);
-        ({compiled} = this._format(stack));
-      }
     }
 
     // strip invalid $ interpolation in x-traces
     for(let [, config] of Object.entries(stack.configs))
       delete config['x-trace'];
+
+    // sign stuffs here
+    for(let {service_name, compiled, service_type} of item_slices) {
+      if(service_type == "service") {
+        let labels = ns(stack, `services.${service_name}.deploy.labels`);
+        if(Array.isArray(labels))
+          labels.push(`${DSPP_STATE}=compiled`);
+        else
+          labels[DSPP_STATE] = compiled;
+      }
+    }
 
     let tasks = stack.tasks;
     delete stack['tasks'];
@@ -680,8 +690,6 @@ class dspp {
     }
 
     for(let {service_name, compiled, service_type} of item_slices) {
-      if(service_type == "service")
-        await this._write_service_remote_spec(service_name, compiled);
       if(service_type == "task") {
         let task = tasks[service_name];
         await this._write_task_remote_spec(service_name, task, compiled);
