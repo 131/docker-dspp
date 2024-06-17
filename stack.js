@@ -677,7 +677,7 @@ class dspp {
       if(service_type == "service") {
         let labels = ns(stack, `services.${service_name}.deploy.labels`);
         if(Array.isArray(labels))
-          labels.push(`${DSPP_STATE}=encoded`);
+          labels.push(`${DSPP_STATE}=${encoded}`);
         else
           labels[DSPP_STATE] = encoded;
       }
