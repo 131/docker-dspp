@@ -14,7 +14,7 @@
   "main": "stack.js",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/131/docker-dspp.git"
+    "url": "git@github.com:131/docker-dspp.git"
   },
   "keywords": [
     "docker",
