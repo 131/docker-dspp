@@ -6,6 +6,8 @@ const {version : DSPP_VERSION } = require('./package.json');
 
 const fs    = require('fs');
 const path  = require('path');
+const zlib  = require('zlib');
+
 const spawn = require('child_process').spawn;
 const {PassThrough} = require('stream');
 
@@ -370,13 +372,25 @@ class dspp {
   async _read_service_remote_spec(service_name) {
     let labels = await this.docker_sdk.service_labels_read(service_name);
     let spec = labels[DSPP_STATE];
-    return spec || "";
+    return this._state_decode(spec || "", service_name);
   }
 
   async _write_service_remote_spec(service_name, compiled) {
     await this.docker_sdk.service_label_write(service_name, DSPP_STATE, compiled);
   }
 
+  _state_decode(state, object_name) {
+    try {
+      return zlib.gunzipSync(Buffer.from(state, 'base64')).toString();
+    } catch{
+      console.error("Reading legacy state format for", object_name);
+      return state;
+    }
+  }
+
+  _state_encode(state) {
+    return zlib.gzipSync(state).toString('base64');
+  }
 
   _format(stack) {
     stack  = sortObjByKey(stack);
@@ -659,12 +673,13 @@ class dspp {
 
     // sign stuffs here
     for(let {service_name, compiled, service_type} of item_slices) {
+      let encoded = this._state_encode(compiled);
       if(service_type == "service") {
         let labels = ns(stack, `services.${service_name}.deploy.labels`);
         if(Array.isArray(labels))
-          labels.push(`${DSPP_STATE}=compiled`);
+          labels.push(`${DSPP_STATE}=encoded`);
         else
-          labels[DSPP_STATE] = compiled;
+          labels[DSPP_STATE] = encoded;
       }
     }
 
