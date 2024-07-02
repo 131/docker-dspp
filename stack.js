@@ -94,6 +94,7 @@ class dspp {
     this.stack_name    = null;
     this.header_files  = [];
     this.compose_files = [];
+    this.headers       = "";
 
     let config = laxParser(readFileSync(entry_file));
     this.stack_name = config.has("name") ? config.get("name") : path.basename(entry_file, '.yml');
@@ -115,6 +116,9 @@ class dspp {
 
       this.compose_files.push(file_path);
       let config = laxParser(readFileSync(file_path));
+
+      if(config.has("headers"))
+        this.headers += stringify(config.get("headers"));
 
       if(!config.has("includes"))
         return;
@@ -144,11 +148,10 @@ class dspp {
   async _parse() {
 
     let cas = new Cas(CACHE_CAS_PATH);
-    let {stack_name, header_files, compose_files} = this;
+    let {stack_name, header_files, headers, compose_files} = this;
 
-    let env = '';
     for(let header_file of header_files)
-      env += readFileSync(header_file) + `\n`;
+      headers += readFileSync(header_file) + `\n`;
 
     let stack = '';
     let out = {};
@@ -159,7 +162,7 @@ class dspp {
 
 
     for(let compose_file of compose_files || []) {
-      let body = env + readFileSync(compose_file);
+      let body = headers + readFileSync(compose_file);
       stack += `${body}\n---\n`;
       progress.tick();
 
