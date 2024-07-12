@@ -98,6 +98,10 @@ class dspp {
 
     let config = laxParser(readFileSync(entry_file));
     this.stack_name = config.has("name") ? config.get("name") : path.basename(entry_file, '.yml');
+    if(process.env.STACK_NAME && process.env.STACK_NAME != this.stack_name) {
+      console.error("Conflicting stack name %s vs %s, cowardly aborting", process.env.STACK_NAME, this.stack_name);
+      process.exit(1);
+    }
 
     let noProgress  = !!(dict['no-progress'] || dict['cli://unattended']);
     this.progressOpts = {width : 60, incomplete : ' ', clear : true,  stream : noProgress ? new PassThrough() : process.stderr };
