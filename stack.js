@@ -197,7 +197,7 @@ class dspp {
 
         //custom behavior for non alias merges
         visit(doc, (key, node, path) => {
-          if(key == "key" && node.value == "<<" && !isAlias(path[path.length - 1].value)) {
+          if(key == "key" && node.value == "<<<" && !isAlias(path[path.length - 1].value)) {
             node.value = guid();
             merged.push(node.value);
           }

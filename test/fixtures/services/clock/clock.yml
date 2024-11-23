@@ -10,7 +10,7 @@ x-env-clock:
 services:
   clock:
     environment:
-      <<: $${x-env-clock}
+      <<<: $${x-env-clock}
       CLOCK_TZ: America/Dallas
 
     image: si/clock:v1.0.1
