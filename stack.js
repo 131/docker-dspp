@@ -5,6 +5,7 @@
 const {version : DSPP_VERSION } = require('./package.json');
 
 const fs    = require('fs');
+const url   = require('url');
 const path  = require('path');
 const zlib  = require('zlib');
 
@@ -27,7 +28,10 @@ const ns         = require('mout/object/namespace');
 const semver     = require('semver');
 const stripStart = require('nyks/string/stripStart');
 const guid       = require('mout/random/guid');
+const trim       = require('mout/string/trim');
 const readline   = require('readline');
+const request    = require('nyks/http/request');
+const drain      = require('nyks/stream/drain');
 
 const {dict}  = require('nyks/process/parseArgs')();
 
@@ -96,12 +100,21 @@ class dspp {
     this.compose_files = [];
     this.headers       = "";
 
+    this.rc = {};
+    let rcfile = '.dspprc';
+    if(fs.existsSync(rcfile)) {try {
+      this.rc = laxParser(readFileSync(rcfile)).toJSON();
+    } catch(e) {}}
+
+
     let config = laxParser(readFileSync(entry_file));
     this.stack_name = config.has("name") ? config.get("name") : path.basename(entry_file, '.yml');
     if(process.env.STACK_NAME && process.env.STACK_NAME != this.stack_name) {
       console.error("Conflicting stack name %s vs %s, cowardly aborting", process.env.STACK_NAME, this.stack_name);
       process.exit(1);
     }
+
+    this.secrets_list = config.has('secrets') ? config.get('secrets').toJSON() : [];
 
     let noProgress  = !!(dict['no-progress'] || dict['cli://unattended']);
     this.progressOpts = {width : 60, incomplete : ' ', clear : true,  stream : noProgress ? new PassThrough() : process.stderr };
@@ -151,6 +164,8 @@ class dspp {
 
   async _parse() {
 
+    let secrets = await this._analyze_secrets();
+
     let cas = new Cas(CACHE_CAS_PATH);
     let {stack_name, header_files, headers, compose_files} = this;
 
@@ -175,7 +190,7 @@ class dspp {
         let token = guid();
 
         body = body.replace(new RegExp('\\$\\$\\{', "g"), token);
-        body = Function('{ctx}', "return `" + body + "`;").call(null, {ctx});
+        body = Function('{ctx, secrets}', "return `" + body + "`;").call(null, {ctx, secrets});
         body = body.replace(new RegExp(token, "g"), '$$$${'); // $ is a special replacement char
 
         let doc = laxParser(body);
@@ -204,7 +219,7 @@ class dspp {
 
 
     out = sortObjByKey(out);
-    out = walk(out, v =>  replaceEnv(v, {...out, stack_name}));
+    out = walk(out, v =>  replaceEnv(v, {...out, stack_name, secrets}));
 
     let processEnvFile = async (obj) => {
       if(!obj.env_file)
@@ -505,9 +520,28 @@ class dspp {
     return {cas, stack, item_slices};
   }
 
+  async _analyze_secrets() {
+    let secrets = {};
+    for(let secret of this.secrets_list) {
+      if(secret.driver != "vault")
+        continue;
+      let {vault_addr, secret_path} =  secret;
+      let remote_url = `${trim(vault_addr, '/')}/v1/secrets/data/${trim(secret_path, '/')}`;
+      let query = {...url.parse(remote_url), headers : {'x-vault-token' : this.rc.VAULT_TOKEN}};
+      let req = await request(query);
+      if(req.statusCode !== 200) {
+        console.error("Could not retrieve vault secret", remote_url);
+        continue;
+      }
+      let {data : {data : body }} = JSON.parse(await drain(req));
+      deepMixIn(secrets, body);
+    }
+    return secrets;
+  }
 
   //parse local stack, and fetch remote stack status
   async _analyze(filter) {
+
     let tmp = await this._analyze_local(filter);
 
     let remote_stack    = {};
