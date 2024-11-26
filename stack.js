@@ -99,7 +99,7 @@ class dspp {
     this.header_files  = [];
     this.compose_files = [];
     this.headers       = "";
-
+    this.cwd           = path.dirname(entry_file);
     this.rc = {};
     let rcfile = '.dspprc';
     if(fs.existsSync(rcfile)) {try {
@@ -523,18 +523,24 @@ class dspp {
   async _analyze_secrets() {
     let secrets = {};
     for(let secret of this.secrets_list) {
-      if(secret.driver != "vault")
-        continue;
-      let {vault_addr, secret_path} =  secret;
-      let remote_url = `${trim(vault_addr, '/')}/v1/secrets/data/${trim(secret_path, '/')}`;
-      let query = {...url.parse(remote_url), headers : {'x-vault-token' : this.rc.VAULT_TOKEN}};
-      let req = await request(query);
-      if(req.statusCode !== 200) {
-        console.error("Could not retrieve vault secret", remote_url);
-        continue;
+      if(secret.driver == "file") {
+        let file_path = path.join(this.cwd, secret.file_path);
+        let body  = laxParser(readFileSync(file_path)).toJSON();
+        deepMixIn(secrets, body);
       }
-      let {data : {data : body }} = JSON.parse(await drain(req));
-      deepMixIn(secrets, body);
+
+      if(secret.driver == "vault") {
+        let {vault_addr, secret_path} =  secret;
+        let remote_url = `${trim(vault_addr, '/')}/v1/secrets/data/${trim(secret_path, '/')}`;
+        let query = {...url.parse(remote_url), headers : {'x-vault-token' : this.rc.VAULT_TOKEN}};
+        let req = await request(query);
+        if(req.statusCode !== 200) {
+          console.error("Could not retrieve vault secret", remote_url);
+          continue;
+        }
+        let {data : {data : body }} = JSON.parse(await drain(req));
+        deepMixIn(secrets, body);
+      }
     }
     return secrets;
   }
