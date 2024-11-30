@@ -206,7 +206,7 @@ class dspp {
         doc = doc.toJS({maxAliasCount : -1});
         deepMixIn(out, doc);
         //deepMixin will not merge Symbols
-        for(let obj of ['services', 'configs', 'tasks']) {
+        for(let obj of ['services', 'configs', 'tasks', 'secrets']) {
           for(let id of Object.keys(doc[obj] || {}))
             out[obj][id][SOURCE_FILE] = compose_file;
         }
@@ -247,9 +247,10 @@ class dspp {
     }
 
 
-    let config_map = {};
+    let objects_map = { configs : {}, secrets : {}};
+    let total  = Object.keys(out.configs || {}).length + Object.keys(out.secrets || {}).length;
 
-    progress = new ProgressBar('Computing (:total) configs [:bar]', {...this.progressOpts, total : Object.keys(out.configs || {}).length});
+    progress = new ProgressBar('Computing (:total) objects [:bar]', {...this.progressOpts, total});
 
 
     // remap volume
@@ -289,52 +290,56 @@ class dspp {
       return v;
     });
 
+    let objects = Object.entries(out.configs || {}).map(entry => (entry.push('configs'), entry));
+    objects.push(...Object.entries(out.secrets || {}).map(entry => (entry.push('secrets'), entry)));
+
     for(let skip of [
       // 1st pass : skip serialized
-      config => !!config.external || !!config.format || !!config.bundle,
+      object => !!object.external || !!object.format || !!object.bundle,
       // 2nd pass : skip bundle
-      config => !!config.external || !!config.file  || !!config.bundle,
+      object => !!object.external || !!object.file  || !!object.bundle,
       // 2nd pass : skip processed
-      config => !!config.external || !!config.file,
+      object => !!object.external || !!object.file,
     ]) {
 
-      let configs = Object.entries(out.configs || {});
 
 
-      for(let [config_name, config] of configs) {
-        if(skip(config))
+      for(let [object_name, object, object_type] of objects) {
+        if(skip(object))
           continue;
 
         progress.tick();
-        config_map[config_name] = [];
-        for await(let line of cas.config(config_map, config_name, config, config[SOURCE_FILE])) {
+        objects_map[object_type][object_name] = [];
+        for await(let line of cas.config(objects_map[object_type], object_name, object, object[SOURCE_FILE])) {
           let {cas_path, cas_name, trace} = line;
-          config_map[config_name].push(line);
-          out.configs[cas_name] = {name : config.name, file : cas_path, [CONFIG_NAME] : config_name};
+          objects_map[object_type][object_name].push(line);
+          out[object_type][cas_name] = {name : object.name, file : cas_path, [CONFIG_NAME] : object_name};
           if(trace)
           //walk(trace, v =>  v.replace(/\$(?![a-z${])/gi, '$$$')); //this is no longer necessary since x-traces are not deployed
-            out.configs[cas_name]['x-trace'] = trace;
+            out[object_type][cas_name]['x-trace'] = trace;
         }
-        delete out.configs[config_name];
+        delete out[object_type][object_name];
       }
 
 
 
       // this need to be proceseed before 2nd pass
       for(let obj of Object.values({...out.services, ...out.tasks})) {
-        if(!obj.configs)
-          continue;
-        let base = obj.configs || [];
-        obj.configs = [];
-
-        for(let config of  base) {
-          if(!config_map[config.source]) {
-            obj.configs.push(config);
+        for(let object_type of ['configs', 'secrets']) {
+          if(!obj[object_type])
             continue;
-          }
-          for(let line of config_map[config.source]) {
-            let target = line.target ? path.join(config.target, line.target) : config.target;
-            obj.configs.push({...config, target, source : line.cas_name, mode : config.mode || line.mode});
+          let base = obj[object_type] || [];
+          obj[object_type] = [];
+
+          for(let object of  base) {
+            if(!objects_map[object_type][object.source]) {
+              obj[object_type].push(object);
+              continue;
+            }
+            for(let line of objects_map[object_type][object.source]) {
+              let target = line.target ? path.join(object.target, line.target) : object.target;
+              obj[object_type].push({...object, target, source : line.cas_name, mode : object.mode || line.mode});
+            }
           }
         }
       }
