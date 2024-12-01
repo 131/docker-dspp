@@ -29,6 +29,7 @@ const semver     = require('semver');
 const stripStart = require('nyks/string/stripStart');
 const guid       = require('mout/random/guid');
 const trim       = require('mout/string/trim');
+const get        = require('mout/object/get');
 const readline   = require('readline');
 const request    = require('nyks/http/request');
 const drain      = require('nyks/stream/drain');
@@ -108,13 +109,16 @@ class dspp {
 
 
     let config = laxParser(readFileSync(entry_file));
+
     this.stack_name = config.has("name") ? config.get("name") : path.basename(entry_file, '.yml');
     if(process.env.STACK_NAME && process.env.STACK_NAME != this.stack_name) {
       console.error("Conflicting stack name %s vs %s, cowardly aborting", process.env.STACK_NAME, this.stack_name);
       process.exit(1);
     }
 
-    this.secrets_list = config.has('secrets') ? config.get('secrets').toJSON() : [];
+
+    this.secrets_list = config.has('x-secrets') ? config.get('x-secrets').toJSON() : [];
+    this.secrets_list = walk(this.secrets_list, v =>  replaceEnv(v, { env : process.env, stack_name : this.stack_name}));
 
     let noProgress  = !!(dict['no-progress'] || dict['cli://unattended']);
     this.progressOpts = {width : 60, incomplete : ' ', clear : true,  stream : noProgress ? new PassThrough() : process.stderr };
@@ -219,7 +223,7 @@ class dspp {
 
 
     out = sortObjByKey(out);
-    out = walk(out, v =>  replaceEnv(v, {...out, stack_name, secrets}));
+    out = walk(out, v =>  replaceEnv(v, {...out, env : process.env, stack_name, secrets}));
 
     let processEnvFile = async (obj) => {
       if(!obj.env_file)
@@ -535,7 +539,21 @@ class dspp {
       }
 
       if(secret.driver == "vault") {
-        let {vault_addr, secret_path} =  secret;
+        let {vault_addr, secret_path, jwt_auth} =  secret;
+        if(!this.rc.VAULT_TOKEN && jwt_auth) {
+          let {login, jwt, role} = jwt_auth;
+          let remote_url = `${trim(vault_addr, '/')}/v1/${trim(login, '/')}`, data = {jwt, role};
+          let query = {...url.parse(remote_url), json : true};
+          let res = await request(query, data);
+          let response = String(await drain(res));
+
+          if(res.statusCode !== 200) {
+            console.error("Could not login to vault", response, {vault_addr, login});
+            continue;
+          }
+          this.rc.VAULT_TOKEN = get(JSON.parse(response), 'auth.client_token');
+        }
+
         let remote_url = `${trim(vault_addr, '/')}/v1/secrets/data/${trim(secret_path, '/')}`;
         let query = {...url.parse(remote_url), headers : {'x-vault-token' : this.rc.VAULT_TOKEN}};
         let req = await request(query);
@@ -547,6 +565,7 @@ class dspp {
         deepMixIn(secrets, body);
       }
     }
+
     return secrets;
   }
 

@@ -164,7 +164,7 @@ class Cas {
 
 
     if(config_body == undefined)
-      throw `No body for config '${config_name}'`;
+      throw `No body for config '${config_name}' in ${source_file}`;
 
 
     let {hash, cas_path} = this.feed(config_body);
