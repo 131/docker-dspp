@@ -457,6 +457,18 @@ class dspp {
     return out[config_name];
   }
 
+  async secret(secret_name) {
+    let {out : {...input}, cas} = await this._parse();
+
+    let out = {};
+    for(let [, secret] of Object.entries(input.secrets)) {
+      let secret_name = secret[CONFIG_NAME];
+      out[secret_name] = cas.store[secret.file];
+    }
+
+    return out[secret_name];
+  }
+
   async _analyze_local(filter = false) {
     filter = new RegExp(filter || ".*");
 
