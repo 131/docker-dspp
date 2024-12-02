@@ -170,7 +170,7 @@ class dspp {
 
     let secrets = await this._analyze_secrets();
 
-    let cas = new Cas(CACHE_CAS_PATH);
+    let cas = new Cas(CACHE_CAS_PATH, this.rc);
     let {stack_name, header_files, headers, compose_files} = this;
 
     for(let header_file of header_files)

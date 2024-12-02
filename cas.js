@@ -32,9 +32,10 @@ const ctx = {progress : Progress, request, drain, replaceEnv, yaml};
 
 class Cas {
 
-  constructor(wd = null) {
+  constructor(wd = null, rc = {}) {
     this.store = {};
     this.wd    = wd;
+    this.rc    = rc;
   }
 
   write() {
@@ -97,7 +98,7 @@ class Cas {
       } else {
         let largs = Array.isArray(args) ? args : [args];
         let script = require(file_path);
-        contents = typeof script == "function" ? await script({...ctx, wd, source_file}, ...largs) : script;
+        contents = typeof script == "function" ? await script({...ctx, wd, rc : this.rc, source_file}, ...largs) : script;
       }
     }
 
