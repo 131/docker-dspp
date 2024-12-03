@@ -297,13 +297,14 @@ class dspp {
     let objects = Object.entries(out.configs || {}).map(entry => (entry.push('configs'), entry));
     objects.push(...Object.entries(out.secrets || {}).map(entry => (entry.push('secrets'), entry)));
 
+    let done = Symbol("done");
     for(let skip of [
       // 1st pass : skip serialized
-      object => !!object.external || !!object.format || !!object.bundle,
+      object => !!object.external || !!object.format || !!object.bundle || !!object[done],
       // 2nd pass : skip bundle
-      object => !!object.external || !!object.file  || !!object.bundle,
+      object => !!object.external || !!object.file  || !!object.bundle || !!object[done],
       // 2nd pass : skip processed
-      object => !!object.external || !!object.file,
+      object => !!object.external || !!object.file || !!object[done],
     ]) {
 
 
@@ -311,6 +312,8 @@ class dspp {
       for(let [object_name, object, object_type] of objects) {
         if(skip(object))
           continue;
+
+        object[done] = true;
 
         progress.tick();
         objects_map[object_type][object_name] = [];
