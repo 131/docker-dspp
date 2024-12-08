@@ -634,14 +634,15 @@ class dspp {
   }
 
   //public helper
-  async parse(write = false) {
+  async parse(write = false, trace = false) {
     let {filter} = this;
 
     let {cas, stack} = await this._analyze_local(filter);
     // strip invalid $ interpolation in x-traces
-    for(let [, config] of Object.entries(stack.configs))
-      delete config['x-trace'];
-
+    if(!trace) {
+      for(let [, config] of Object.entries(stack.configs))
+        delete config['x-trace'];
+    }
 
     let {compiled} = this._format(stack);
     if(write)

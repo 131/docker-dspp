@@ -1,6 +1,13 @@
-# dspp-stack @7e6ce (dspp v6.0.3)
+# dspp-stack @12078 (dspp v10.2.0)
 version: "3.8"
 configs:
+  clock-compute-3-6d7fc:
+    file: .docker-stack/.cas/6d7fce9fee471194aa8b5b6e47267f03
+    x-trace: |
+      3
+  clock-compute-foo-37b51:
+    file: .docker-stack/.cas/37b51d194a7513e45b56f6524f2d51f2
+    x-trace: bar
   clock-config-0d169:
     file: .docker-stack/.cas/0d169a03c84efedb0cdb5380677e129e
     x-trace: America/Dallas
@@ -132,6 +139,10 @@ services:
     configs:
       - source: clock-config-0d169
         target: /etc/timezone
+      - source: clock-compute-3-6d7fc
+        target: /etc/3
+      - source: clock-compute-foo-37b51
+        target: /etc/foo
     deploy:
       placement:
         constraints:
