@@ -70,13 +70,25 @@ class Cas {
 
     let config_body;
     let wd = path.dirname(source_file);
-    let {file, args, env, exec, bundle, require : require_file, contents, format, directory, 'x-trace' : trace = true} = config;
+    let {file, shell, args, env, exec, stdin, bundle, require : require_file, contents, format, directory, 'x-trace' : trace = true} = config;
 
     if(exec) {
       let largs = Array.isArray(args) ? args : [args];
-
       let script = path.resolve(wd, exec);
       let child = spawn(script, largs, {env});
+      if(stdin)
+        await child.stdin.end(stdin);
+
+      ([, contents] = await Promise.all([wait(child), drain(child.stdout)]));
+      contents = String(contents);
+    }
+
+    if(shell) {
+      let largs = Array.isArray(args) ? args : [args];
+      let child = spawn(shell, largs, {env, shell : true});
+      if(stdin)
+        await child.stdin.end(stdin);
+
       ([, contents] = await Promise.all([wait(child), drain(child.stdout)]));
       contents = String(contents);
     }
