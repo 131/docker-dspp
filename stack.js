@@ -102,11 +102,6 @@ class dspp {
     this.headers       = "";
     this.cwd           = path.dirname(entry_file);
     this.rc = {};
-    let rcfile = '.dspprc';
-    if(fs.existsSync(rcfile)) {try {
-      this.rc = laxParser(readFileSync(rcfile)).toJSON();
-    } catch(e) {}}
-
 
     let config = laxParser(readFileSync(entry_file));
 
@@ -114,6 +109,12 @@ class dspp {
     if(process.env.STACK_NAME && process.env.STACK_NAME != this.stack_name) {
       console.error("Conflicting stack name %s vs %s, cowardly aborting", process.env.STACK_NAME, this.stack_name);
       process.exit(1);
+    }
+
+    for(let rcfile of [`.dspprc`, `.${this.stack_name}.dspprc`]) {
+      if(fs.existsSync(rcfile)) {try {
+        this.rc = laxParser(readFileSync(rcfile)).toJSON();
+      } catch(e) {}}
     }
 
 
