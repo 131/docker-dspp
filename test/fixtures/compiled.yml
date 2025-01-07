@@ -1,4 +1,4 @@
-# dspp-stack @3eb45 (dspp v10.3.0)
+# dspp-stack @2685b (dspp v10.5.1)
 version: "3.8"
 configs:
   clock-compute-3-6d7fc:
@@ -206,6 +206,7 @@ services:
       DEBUG: "*,-express:*,-send,-xml-parser"
       DEBUG_FORMAT: :namespace :body
       DEBUG_INSPECT_BREAKLENGTH: 0
+      FOO: bar
       IMAGE_TAG: domyks/si/pulse:v3.4.8
       PULSE_CONFIG_PATH: /app/config/config.json.js
       PULSE_JOBS_PATH: /app/config/jobs.json

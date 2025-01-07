@@ -167,9 +167,12 @@ class dspp {
   }
 
 
-  async _parse() {
+  async _parse(redacted = false) {
 
     let secrets = await this._analyze_secrets();
+    if(redacted)
+      secrets = walk(secrets, () => "<redacted>");
+
 
     let cas = new Cas(CACHE_CAS_PATH, this.rc);
     let {stack_name, header_files, headers, compose_files} = this;
@@ -473,10 +476,10 @@ class dspp {
     return out[secret_name];
   }
 
-  async _analyze_local(filter = false) {
+  async _analyze_local(filter = false, redacted = false) {
     filter = new RegExp(filter || ".*");
 
-    let {out : {version, ...input}, cas} = await this._parse();
+    let {out : {version, ...input}, cas} = await this._parse(redacted);
 
     let item_slices = [];
     let stack = {version};
@@ -581,7 +584,6 @@ class dspp {
         deepMixIn(secrets, body);
       }
     }
-
     return secrets;
   }
 
@@ -635,10 +637,10 @@ class dspp {
   }
 
   //public helper
-  async parse(write = false, trace = false) {
+  async parse(write = false, trace = false, redacted = false) {
     let {filter} = this;
 
-    let {cas, stack} = await this._analyze_local(filter);
+    let {cas, stack} = await this._analyze_local(filter, redacted);
     // strip invalid $ interpolation in x-traces
     if(!trace) {
       for(let [, config] of Object.entries(stack.configs))

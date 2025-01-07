@@ -1,5 +1,10 @@
 name: dspp-stack
 
+x-secrets:
+  - driver: file
+    file_path: ./secrets.yml
+
+
 includes:
   - type: header
     path: env/macros.yml

@@ -30,6 +30,7 @@ services:
       DEBUG: "*,-express:*,-send,-xml-parser"
       PULSE_CONFIG_PATH: /app/config/config.json.js
       PULSE_JOBS_PATH: /app/config/jobs.json
+      FOO: ${secrets.foo}
 
     networks:
       - default
