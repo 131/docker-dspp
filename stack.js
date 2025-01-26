@@ -8,10 +8,12 @@ const fs    = require('fs');
 const url   = require('url');
 const path  = require('path');
 const zlib  = require('zlib');
+const net   = require('net');
 
 const spawn = require('child_process').spawn;
 const {PassThrough} = require('stream');
 
+const SSHAgent   = require('ssh-agent-js/client');
 const deepMixIn  = require('mout/object/deepMixIn');
 const glob       = require('glob').sync;
 
@@ -558,16 +560,61 @@ class dspp {
       }
 
       if(secret.driver == "vault") {
-        let {vault_addr, secret_path, jwt_auth} =  secret;
+        let {vault_addr, secret_path, jwt_auth, ssh_auth} =  secret;
+
+        if(process.env.SSH_AUTH_SOCK && ssh_auth) {
+          let {path = 'ssh', role} = ssh_auth;
+
+          let nonce;
+          {
+            let remote_url = `${trim(vault_addr, '/')}/v1/auth/${path}/nonce`;
+            let query = {...url.parse(remote_url), json : true};
+            let res = await request(query);
+            ({data : {nonce}} = JSON.parse(String(await drain(res))));
+          }
+          let sock;
+          await new Promise(resolve => (sock = net.connect(process.env.SSH_AUTH_SOCK, resolve)));
+          let agent = new SSHAgent(sock);
+          let keys = Object.values(await agent.list_keys());
+
+          let token;
+          await eachLimit(keys, 1, async ({type, ssh_key, fingerprint}) => {
+            if(token)
+              return;
+
+            const public_key = `${type} ${ssh_key}`;
+            const {signature} =  await agent.sign(fingerprint, Buffer.from(nonce));
+            let remote_url = `${trim(vault_addr, '/')}/v1/auth/${path}/login`, data = {public_key, role, nonce : Buffer.from(nonce).toString('base64'), signature};
+
+
+            let query = {...url.parse(remote_url), json : true};
+            let res = await request(query, data);
+            let response = String(await drain(res));
+
+            if(res.statusCode !== 200) {
+              console.log("Failed in ", response);
+              return;
+            }
+            token = get(JSON.parse(response), 'auth.client_token');
+          });
+          sock.destroy();
+
+          if(!token) {
+            console.error("Could not login to vault");
+            continue;
+          }
+          this.rc.VAULT_TOKEN = token;
+        }
+
         if(!this.rc.VAULT_TOKEN && jwt_auth) {
-          let {login, jwt, role} = jwt_auth;
-          let remote_url = `${trim(vault_addr, '/')}/v1/${trim(login, '/')}`, data = {jwt, role};
+          let {path, jwt, role} = jwt_auth;
+          let remote_url = `${trim(vault_addr, '/')}/v1/auth/${path}/login`, data = {jwt, role};
           let query = {...url.parse(remote_url), json : true};
           let res = await request(query, data);
           let response = String(await drain(res));
 
           if(res.statusCode !== 200) {
-            console.error("Could not login to vault", response, {vault_addr, login});
+            console.error("Could not login to vault", response, {vault_addr, remote_url});
             continue;
           }
           this.rc.VAULT_TOKEN = get(JSON.parse(response), 'auth.client_token');

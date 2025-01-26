@@ -36,6 +36,7 @@
     "nyks": "^6.9.1",
     "progress": "^2.0.3",
     "semver": "^5.3.0",
+    "ssh-agent-js": "^2.0.4",
     "yaml": "^2.6.1"
   },
   "devDependencies": {
