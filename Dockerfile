@@ -14,5 +14,5 @@ COPY . .
 RUN npm install --production
 WORKDIR /app
 ENTRYPOINT ["/stack.js"]
-LABEL "org.opencontainers.image.version"="10.7.1"
+LABEL "org.opencontainers.image.version"="10.7.2"
 LABEL "org.opencontainers.image.source"="git@github.com:131/docker-dspp.git"
