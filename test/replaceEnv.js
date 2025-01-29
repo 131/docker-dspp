@@ -2,7 +2,7 @@
 
 const expect = require('expect.js');
 
-const replaceEnv = require('../replaceEnv');
+const {replaceEnv} = require('../replaceEnv');
 
 describe("Testing replaceEnv", function() {
 

@@ -5,15 +5,12 @@
 const {version : DSPP_VERSION } = require('./package.json');
 
 const fs    = require('fs');
-const url   = require('url');
 const path  = require('path');
 const zlib  = require('zlib');
-const net   = require('net');
 
 const spawn = require('child_process').spawn;
 const {PassThrough} = require('stream');
 
-const SSHAgent   = require('ssh-agent-js/client');
 const deepMixIn  = require('mout/object/deepMixIn');
 const glob       = require('glob').sync;
 
@@ -30,21 +27,18 @@ const ns         = require('mout/object/namespace');
 const semver     = require('semver');
 const stripStart = require('nyks/string/stripStart');
 const guid       = require('mout/random/guid');
-const trim       = require('mout/string/trim');
-const get        = require('mout/object/get');
 const readline   = require('readline');
-const request    = require('nyks/http/request');
-const drain      = require('nyks/stream/drain');
 
 const {dict}  = require('nyks/process/parseArgs')();
 
-const {stringify, parseDocument,  Parser, Composer, visit, isAlias} = require('yaml');
+const {stringify, parseDocument, visit, isAlias} = require('yaml');
 
 const DockerSDK = require('@131/docker-sdk');
 const {escape}  = DockerSDK;
 
 const Cas       = require('./cas');
-const replaceEnv = require('./replaceEnv');
+const {replaceEnv, laxParser, readFileSync} = require('./replaceEnv');
+const Secrets = require('./secrets');
 
 
 const DOCKER_STACK_NS = 'com.docker.stack.namespace';
@@ -66,19 +60,7 @@ const flatten = obj => JSON.parse(JSON.stringify(obj));
 const SOURCE_FILE = Symbol("x-source-file");
 const CONFIG_NAME = Symbol("x-config-name");
 
-const readFileSync = function(file_path) {
-  let fp = path.resolve(file_path);
-  if(readFileSync[fp])
-    return readFileSync[fp];
-  return readFileSync[fp] = fs.readFileSync(fp, 'utf-8');
-};
 
-
-const laxParser = function(body) {
-  const tokens = new Parser().parse(body);
-  const docs = new Composer({merge : true, uniqueKeys : false}).compose(tokens);
-  return docs.next().value;
-};
 
 class dspp {
 
@@ -120,8 +102,10 @@ class dspp {
     }
 
 
-    this.secrets_list = config.has('x-secrets') ? config.get('x-secrets').toJSON() : [];
-    this.secrets_list = walk(this.secrets_list, v =>  replaceEnv(v, { env : process.env, stack_name : this.stack_name}));
+    let secrets_list = config.has('x-secrets') ? config.get('x-secrets').toJSON() : [];
+    secrets_list = walk(secrets_list, v =>  replaceEnv(v, { env : process.env, stack_name : this.stack_name}));
+
+    this.secrets = new Secrets({secrets_list, wd : this.cwd, rc : this.rc});
 
     let noProgress  = !!(dict['no-progress'] || dict['cli://unattended']);
     this.progressOpts = {width : 60, incomplete : ' ', clear : true,  stream : noProgress ? new PassThrough() : process.stderr };
@@ -171,7 +155,7 @@ class dspp {
 
   async _parse(redacted = false) {
 
-    let secrets = await this._analyze_secrets();
+    let secrets = await this.secrets.retrieve();
     if(redacted)
       secrets = walk(secrets, () => "<redacted>");
 
@@ -550,89 +534,7 @@ class dspp {
     return {cas, stack, item_slices};
   }
 
-  async _analyze_secrets() {
-    let secrets = {};
-    for(let secret of this.secrets_list) {
-      if(secret.driver == "file") {
-        let file_path = path.join(this.cwd, secret.file_path);
-        let body  = laxParser(readFileSync(file_path)).toJSON();
-        deepMixIn(secrets, body);
-      }
 
-      if(secret.driver == "vault") {
-        let {vault_addr, secret_path, jwt_auth, ssh_auth} =  secret;
-
-        if(process.env.SSH_AUTH_SOCK && ssh_auth) {
-          let {path = 'ssh', role} = ssh_auth;
-
-          let nonce;
-          {
-            let remote_url = `${trim(vault_addr, '/')}/v1/auth/${path}/nonce`;
-            let query = {...url.parse(remote_url), json : true};
-            let res = await request(query);
-            ({data : {nonce}} = JSON.parse(String(await drain(res))));
-          }
-          let sock;
-          await new Promise(resolve => (sock = net.connect(process.env.SSH_AUTH_SOCK, resolve)));
-          let agent = new SSHAgent(sock);
-          let keys = Object.values(await agent.list_keys());
-
-          let token;
-          await eachLimit(keys, 1, async ({type, ssh_key, fingerprint}) => {
-            if(token)
-              return;
-
-            const public_key = `${type} ${ssh_key}`;
-            const {signature} =  await agent.sign(fingerprint, Buffer.from(nonce));
-            let remote_url = `${trim(vault_addr, '/')}/v1/auth/${path}/login`, data = {public_key, role, nonce : Buffer.from(nonce).toString('base64'), signature};
-
-
-            let query = {...url.parse(remote_url), json : true};
-            let res = await request(query, data);
-            let response = String(await drain(res));
-
-            if(res.statusCode !== 200) {
-              console.log("Failed in ", response);
-              return;
-            }
-            token = get(JSON.parse(response), 'auth.client_token');
-          });
-          sock.destroy();
-
-          if(!token) {
-            console.error("Could not login to vault");
-            continue;
-          }
-          this.rc.VAULT_TOKEN = token;
-        }
-
-        if(!this.rc.VAULT_TOKEN && jwt_auth) {
-          let {path, jwt, role} = jwt_auth;
-          let remote_url = `${trim(vault_addr, '/')}/v1/auth/${path}/login`, data = {jwt, role};
-          let query = {...url.parse(remote_url), json : true};
-          let res = await request(query, data);
-          let response = String(await drain(res));
-
-          if(res.statusCode !== 200) {
-            console.error("Could not login to vault", response, {vault_addr, remote_url});
-            continue;
-          }
-          this.rc.VAULT_TOKEN = get(JSON.parse(response), 'auth.client_token');
-        }
-
-        let remote_url = `${trim(vault_addr, '/')}/v1/secrets/data/${trim(secret_path, '/')}`;
-        let query = {...url.parse(remote_url), headers : {'x-vault-token' : this.rc.VAULT_TOKEN}};
-        let req = await request(query);
-        if(req.statusCode !== 200) {
-          console.error("Could not retrieve vault secret", remote_url);
-          continue;
-        }
-        let {data : {data : body }} = JSON.parse(await drain(req));
-        deepMixIn(secrets, body);
-      }
-    }
-    return secrets;
-  }
 
   //parse local stack, and fetch remote stack status
   async _analyze(filter) {

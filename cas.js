@@ -23,7 +23,7 @@ const yamlStyle = {singleQuote : false, lineWidth : 0};
 
 const { stringify : tomlStringify } = require('@iarna/toml');
 
-const replaceEnv = require('./replaceEnv');
+const {replaceEnv} = require('./replaceEnv');
 
 const here = process.cwd();
 
