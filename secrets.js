@@ -108,7 +108,7 @@ class Secrets {
     let query = {...url.parse(remote_url), headers : {'x-vault-token' : this.rc.VAULT_TOKEN}};
     let req = await request(query);
     if(req.statusCode !== 200)
-      throw "Could not retrieve vault secret";
+      throw `Could not retrieve vault secret ${secret_path}`;
 
     let {data : {data : body }} = JSON.parse(await drain(req));
     return body;

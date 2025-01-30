@@ -83,6 +83,8 @@ class dspp {
     this.stack_name    = null;
     this.header_files  = [];
     this.compose_files = [];
+    this.compose_scripts = [];
+
     this.headers       = "";
     this.cwd           = path.dirname(entry_file);
     this.rc = {};
@@ -115,14 +117,25 @@ class dspp {
 
 
     process.stderr.write("Parsing entries");
+
     const load = (file_path) => {
       readline.clearLine(process.stderr, 0);
       process.stderr.write(`\rParsing ${file_path}`);
 
+      const ext = path.extname(file_path);
+      if(ext == ".yml")
+        load_yml(file_path);
+      if(ext == ".js") {
+        let script = require(path.resolve(file_path));
+        this.compose_scripts.push(script);
+      }
+    };
+
+    const load_yml = (file_path) => {
       if(this.compose_files.includes(file_path))
         return;
-
       this.compose_files.push(file_path);
+
       let config = laxParser(readFileSync(file_path));
 
       if(config.has("headers"))
@@ -161,7 +174,7 @@ class dspp {
 
 
     let cas = new Cas(CACHE_CAS_PATH, this.rc);
-    let {stack_name, header_files, headers, compose_files} = this;
+    let {stack_name, header_files, headers, compose_files, compose_scripts} = this;
 
     for(let header_file of header_files)
       headers += readFileSync(header_file) + `\n`;
@@ -172,7 +185,26 @@ class dspp {
     let progress = new ProgressBar('Computing stack files [:bar]', {...this.progressOpts, total : compose_files.length});
 
     const merged = [];
+    const ctx = {...dict};
 
+    for(let compose_script of compose_scripts || []) {
+
+      let doc = laxParser(headers);
+      let macros = {};
+
+      visit(doc, (key, node) => {
+        if(node.anchor)
+          macros[node.anchor] = node.toJS(doc);
+      });
+
+      let value;
+      if(typeof compose_script == "object")
+        value = compose_script;
+      if(typeof compose_script == "function")
+        value = await compose_script({ctx, secrets, macros});
+
+      deepMixIn(out, value);
+    }
 
     for(let compose_file of compose_files || []) {
       let body = headers + readFileSync(compose_file);
@@ -180,7 +212,6 @@ class dspp {
       progress.tick();
 
       try {
-        let ctx = {...dict};
         let token = guid();
 
         body = body.replace(new RegExp('\\$\\$\\{', "g"), token);
