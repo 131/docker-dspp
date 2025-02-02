@@ -99,19 +99,26 @@ class Secrets {
       token = await this._login_vault(vault_addr, path, payload);
     }
 
+
     // allow other auths
     if(!token)
       return {};
 
     this.rc.VAULT_TOKEN = token;
-    let remote_url = `${trim(vault_addr, '/')}/v1/secrets/data/${trim(secret_path, '/')}`;
-    let query = {...url.parse(remote_url), headers : {'x-vault-token' : this.rc.VAULT_TOKEN}};
-    let req = await request(query);
-    if(req.statusCode !== 200)
-      throw `Could not retrieve vault secret ${secret_path}`;
+    let secrets = {};
 
-    let {data : {data : body }} = JSON.parse(await drain(req));
-    return body;
+    if(typeof secret_path == "string")
+      secret_path = [secret_path];
+    for(let path of secret_path) {
+      let remote_url = `${trim(vault_addr, '/')}/v1/secrets/data/${trim(path, '/')}`;
+      let query = {...url.parse(remote_url), headers : {'x-vault-token' : this.rc.VAULT_TOKEN}};
+      let req = await request(query);
+      if(req.statusCode !== 200)
+        throw `Could not retrieve vault secret ${secret_path}`;
+      let {data : {data : body }} = JSON.parse(await drain(req));
+      deepMixIn(secrets, body);
+    }
+    return secrets;
   }
 
   async retrieve() {
