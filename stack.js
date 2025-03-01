@@ -87,7 +87,6 @@ class dspp {
 
     this.headers       = "";
     this.cwd           = path.dirname(entry_file);
-    this.rc = {};
 
     let config = laxParser(readFileSync(entry_file));
 
@@ -97,17 +96,11 @@ class dspp {
       process.exit(1);
     }
 
-    for(let rcfile of [`.dspprc`, `.${this.stack_name}.dspprc`]) {
-      if(fs.existsSync(rcfile)) {try {
-        this.rc = laxParser(readFileSync(rcfile)).toJSON();
-      } catch(e) {}}
-    }
-
 
     let secrets_list = config.has('x-secrets') ? config.get('x-secrets').toJSON() : [];
     secrets_list = walk(secrets_list, v =>  replaceEnv(v, { env : process.env, stack_name : this.stack_name}));
 
-    this.secrets = new Secrets({secrets_list, wd : this.cwd, rc : this.rc});
+    this.secrets = new Secrets({secrets_list, wd : this.cwd});
 
     let noProgress  = !!(dict['no-progress'] || dict['cli://unattended']);
     this.progressOpts = {width : 60, incomplete : ' ', clear : true,  stream : noProgress ? new PassThrough() : process.stderr };
@@ -173,7 +166,7 @@ class dspp {
       secrets = walk(secrets, () => "<redacted>");
 
 
-    let cas = new Cas(CACHE_CAS_PATH, this.rc);
+    let cas = new Cas(CACHE_CAS_PATH);
     let {stack_name, header_files, headers, compose_files, compose_scripts} = this;
 
     for(let header_file of header_files)
