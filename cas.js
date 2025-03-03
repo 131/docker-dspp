@@ -69,7 +69,7 @@ class Cas {
 
     let config_body;
     let wd = path.dirname(source_file);
-    let {file, shell, args = [], env, exec, stdin, bundle, require : require_file, contents, format, directory, 'x-trace' : trace = true} = config;
+    let {file, shell, args = [], env, exec, stdin, bundle, mode, require : require_file, contents, format, directory, 'x-trace' : trace = true} = config;
 
     if(exec) {
       let largs = Array.isArray(args) ? args : [args];
@@ -168,6 +168,9 @@ class Cas {
       if(!file_path.startsWith(here))
         file_path = path.join(here, file_path);
 
+      if(fs.statSync(file_path).mode & 0o700 == 0o700)
+        mode = fs.statSync(file_path).mode & 0o777;
+
       config_body = fs.readFileSync(file_path, 'utf-8');
       if(args)
         config_body = walk(config_body, v =>  replaceEnv(v, args));
@@ -184,7 +187,7 @@ class Cas {
     let {hash, cas_path} = this.feed(config_body);
     let cas_name = config_name + '-' + hash.substr(0, 5);
 
-    yield {hash, cas_path, cas_name, trace, target};
+    yield {hash, cas_path, cas_name, trace, target, mode};
   }
 
 }
