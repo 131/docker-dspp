@@ -21,6 +21,7 @@ const md5        = require('nyks/crypto/md5');
 const tmppath    = require('nyks/fs/tmppath');
 const wait       = require('nyks/child_process/wait');
 const pipe       = require('nyks/stream/pipe');
+const drain      = require('nyks/stream/drain');
 const passthru   = require('nyks/child_process/passthru');
 const eachLimit = require('nyks/async/eachLimit');
 const ns         = require('mout/object/namespace');
@@ -384,6 +385,7 @@ class dspp {
   async _delete_task(task_name) {
     let id = escape(`${this.stack_name}_tasks.${task_name}`);
     let res = await this.docker_sdk.request('DELETE', `/configs/${id}`);
+    await drain(res);
     return res.statusCode;
   }
 
@@ -797,8 +799,8 @@ class dspp {
       if(legitimates.includes(stripStart(name, `${this.stack_name}_`)) || Labels[DSPP_NS])
         return; //preserve meta dspp entries
 
-      let res = await this.docker_sdk.request('DELETE', `/configs/${id}`);
-      console.error("Pruning", id, name, res.statusCode);
+      let statusCode = await this._delete_task(name);
+      console.error("Pruning", id, name, statusCode);
     });
 
   }
