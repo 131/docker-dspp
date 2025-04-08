@@ -16,10 +16,11 @@ const replaceEnv = function(str, dict) {
     let v = jqdive(dict, key);
     if(v === undefined)
       continue;
-    if(typeof v == "object")
-      return v;
-    touched = true;
 
+    if(typeof v == "object" || match[0] == str)
+      return v;
+
+    touched = true;
     str = str.replace(match[0], v);
   }
 
