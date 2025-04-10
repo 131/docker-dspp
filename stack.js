@@ -799,8 +799,8 @@ class dspp {
       if(legitimates.includes(stripStart(name, `${this.stack_name}_`)) || Labels[DSPP_NS])
         return; //preserve meta dspp entries
 
-      let statusCode = await this._delete_task(name);
-      console.error("Pruning", id, name, statusCode);
+      let res = await this.docker_sdk.request('DELETE', `/configs/${id}`);
+      console.error("Pruning", id, name, res.statusCode);
     });
 
   }
