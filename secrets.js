@@ -20,8 +20,8 @@ class Secrets {
 
   async _process_file({file_path}) {
     let file_realpath = path.join(this.wd, file_path);
-    let body  = laxParser(readFileSync(file_realpath)).toJSON();
-    return body;
+    let doc  = laxParser(readFileSync(file_realpath, 'utf8'));
+    return doc && doc.toJSON() || {};
   }
 
 
