@@ -29,9 +29,8 @@ class Secrets {
     let {vault_addr, secret_path} = vault_conf;
     let {VAULT_TOKEN} = process.env;
 
-    // allow other auths
     if(!VAULT_TOKEN)
-      return {};
+      throw `Could not log into the vault`;
 
     let secrets = {};
 
