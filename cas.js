@@ -132,7 +132,7 @@ class Cas {
       if(!dir_path.startsWith(here))
         dir_path = path.join(here, dir_path);
 
-      let files = glob("**", {nodir : true, cwd : dir_path});
+      let files = glob("**", { nodir : true, cwd : dir_path, dot : true});
 
       let progress = new Progress('Processing directory [:bar]',
         {width : 60, incomplete : ' ', clear : true, total : files.length});
