@@ -37,8 +37,9 @@ class Secrets {
 
     if(typeof secret_path == "string")
       secret_path = [secret_path];
-    for(let path of secret_path) {
-      let remote_url = `${trim(vault_addr, '/')}/v1/secrets/data/${trim(path, '/')}`;
+    for(let ppath of secret_path) {
+      let [ns, ...paths] = trim(ppath, '/').split('/'), path = paths.join('/');
+      let remote_url = `${trim(vault_addr, '/')}/v1/${ns}/data/${path}`;
       let query = {...url.parse(remote_url), headers : {'x-vault-token' : VAULT_TOKEN}};
       let req = await request(query);
       if(req.statusCode !== 200)
