@@ -171,6 +171,7 @@ class Cas {
       if(fs.statSync(file_path).mode & 0o700 == 0o700)
         mode = fs.statSync(file_path).mode & 0o777;
 
+      config_body = fs.readFileSync(file_path);
       let isUTF8 = Buffer.from(config_body.toString('utf8')).compare(config_body) == 0;
       if(isUTF8) {
         config_body = config_body.toString();
