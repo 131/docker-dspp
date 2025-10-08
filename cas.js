@@ -171,12 +171,17 @@ class Cas {
       if(fs.statSync(file_path).mode & 0o700 == 0o700)
         mode = fs.statSync(file_path).mode & 0o777;
 
-      config_body = fs.readFileSync(file_path, 'utf-8');
-      if(args)
-        config_body = walk(config_body, v =>  replaceEnv(v, args));
+      let isUTF8 = Buffer.from(config_body.toString('utf8')).compare(config_body) == 0;
+      if(isUTF8) {
+        config_body = config_body.toString();
+        if(args)
+          config_body = walk(config_body, v =>  replaceEnv(v, args));
+        if(trace)
+          trace = config_body;
+      } else {
+        trace = "[binary content]";
+      }
 
-      if(trace)
-        trace = config_body;
     }
 
 
