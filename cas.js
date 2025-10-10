@@ -27,7 +27,7 @@ const {replaceEnv} = require('./replaceEnv');
 
 const here = process.cwd();
 
-
+const isUTF8 = (b) => Buffer.from(b.toString('utf8')).compare(b) == 0;
 const ctx = {progress : Progress, request, drain, replaceEnv, yaml};
 
 class Cas {
@@ -172,13 +172,13 @@ class Cas {
         mode = fs.statSync(file_path).mode & 0o777;
 
       config_body = fs.readFileSync(file_path);
-      let isUTF8 = Buffer.from(config_body.toString('utf8')).compare(config_body) == 0;
-      if(isUTF8) {
+
+      if(isUTF8(config_body)) {
         config_body = config_body.toString();
         if(args)
           config_body = walk(config_body, v =>  replaceEnv(v, args));
         if(trace)
-          trace = config_body;
+          trace = config_body.replace(/\r/g, "");
       } else {
         trace = "[binary content]";
       }
