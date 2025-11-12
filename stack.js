@@ -757,10 +757,15 @@ class dspp {
     cas.write();
 
     let stack_contents = fs.createReadStream(stack_path);
-    let child = spawn('docker', ['stack', 'deploy', '--with-registry-auth', '--compose-file', '-', this.stack_name], {stdio : ['pipe', 'inherit', 'inherit']});
 
-    await pipe(stack_contents, child.stdin);
-    await wait(child);
+    try {
+      child = spawn('docker', ['stack', 'deploy', '--with-registry-auth', '--compose-file', '-', this.stack_name], {stdio : ['pipe', 'inherit', 'inherit']});
+      await pipe(stack_contents, child.stdin);
+      await wait(child);
+    } catch(err) {
+      console.error('docker stack deploy error; maybe validate the stack?');
+      throw err;
+    }
 
     for(let task_name of orphan_tasks) {
       let res = await this._delete_task(task_name);
