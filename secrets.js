@@ -5,6 +5,7 @@ const url   = require('url');
 
 const {laxParser, readFileSync} = require('./replaceEnv');
 const deepMixIn  = require('mout/object/deepMixIn');
+const namespace  = require('mout/object/namespace');
 const trim       = require('mout/string/trim');
 
 const request    = require('nyks/http/request');
@@ -38,14 +39,18 @@ class Secrets {
     if(typeof secret_path == "string")
       secret_path = [secret_path];
     for(let ppath of secret_path) {
-      let [ns, ...paths] = trim(ppath, '/').split('/'), path = paths.join('/');
+      if(typeof ppath == "string")
+        ppath = {path : ppath, dest : ''};
+
+      let [ns, ...paths] = trim(ppath.path, '/').split('/'), path = paths.join('/');
       let remote_url = `${trim(vault_addr, '/')}/v1/${ns}/data/${path}`;
       let query = {...url.parse(remote_url), headers : {'x-vault-token' : VAULT_TOKEN}};
       let req = await request(query);
       if(req.statusCode !== 200)
-        throw `Could not retrieve vault secret ${secret_path}`;
+        throw `Could not retrieve vault secret ${ppath.path}`;
       let {data : {data : body }} = JSON.parse(await drain(req));
-      deepMixIn(secrets, body);
+
+      deepMixIn(namespace(secrets, ppath.dest), body);
     }
     return secrets;
   }
@@ -63,7 +68,6 @@ class Secrets {
         deepMixIn(secrets, body);
       }
     }
-
     return secrets;
   }
 
