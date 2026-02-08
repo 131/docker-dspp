@@ -28,7 +28,10 @@ class Secrets {
 
   async _process_vault(vault_conf) {
     let {vault_addr, secret_path} = vault_conf;
-    let {VAULT_TOKEN} = process.env;
+    let {VAULT_TOKEN, VAULT_ADDR} = process.env;
+
+    if(!vault_addr && VAULT_ADDR)
+      vault_addr = VAULT_ADDR;
 
     // allow other auths
     if(!VAULT_TOKEN)
