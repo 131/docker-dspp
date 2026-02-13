@@ -774,7 +774,7 @@ class dspp {
       }
     }
 
-    await passthru('docker', ['service', 'ls']);
+    await passthru('docker', ['stack', 'services', this.stack_name]);
   }
 
 
