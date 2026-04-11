@@ -108,6 +108,9 @@ class Cas {
         let body = fs.readFileSync(file_path, 'utf-8');
         let doc = parseDocument(body, {merge : true});
         contents = doc.toJS({maxAliasCount : -1 });
+        if(args)
+          contents = walk(contents, v =>  replaceEnv(v, args));
+
       } else {
         let largs = Array.isArray(args) ? args : [args];
         let script = require(file_path);
