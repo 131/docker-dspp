@@ -1,0 +1,17 @@
+version: "3.8"
+
+configs:
+  base-config:
+    contents: base
+
+  override-config:
+    contents: override
+
+services:
+  override:
+    image: busybox:latest
+    configs:
+      - source: base-config
+        target: /etc/demo
+      - source: override-config
+        target: /etc/demo

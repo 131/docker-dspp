@@ -41,6 +41,17 @@ describe("Initial dspp check", function() {
 
   });
 
+  it("Should keep only the last config mapped to a given target", async function() {
+    let tmp = new Dspp("override-manifest.yml");
+
+    let {stack} = await tmp._analyze_local();
+    let {configs = []} = stack.services.override;
+
+    expect(configs).to.have.length(1);
+    expect(configs[0].target).to.eql("/etc/demo");
+    expect(configs[0].source).to.match(/^override-config-/);
+  });
+
 
 
 });

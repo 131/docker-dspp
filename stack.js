@@ -60,6 +60,23 @@ const flatten = obj => JSON.parse(JSON.stringify(obj));
 const SOURCE_FILE = Symbol("x-source-file");
 const CONFIG_NAME = Symbol("x-config-name");
 
+function dedupeTargetMappings(entries) {
+  if(!Array.isArray(entries))
+    return entries;
+
+  let seen = new Set();
+  return entries.reduceRight((out, entry) => {
+    let target = entry && entry.target;
+    if(target !== undefined) {
+      if(seen.has(target))
+        return out;
+      seen.add(target);
+    }
+    out.push(entry);
+    return out;
+  }, []).reverse();
+}
+
 
 
 class dspp {
@@ -362,6 +379,9 @@ class dspp {
               obj[object_type].push({...object, target, source : line.cas_name, mode : object.mode || line.mode});
             }
           }
+
+          if(object_type == "configs")
+            obj[object_type] = dedupeTargetMappings(obj[object_type]);
         }
       }
     }
@@ -880,5 +900,3 @@ if(module.parent === null) //ensure module is called directly, i.e. not required
 
 
 module.exports = dspp;
-
-
