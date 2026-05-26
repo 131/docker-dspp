@@ -33,9 +33,8 @@ class Secrets {
     if(!vault_addr && VAULT_ADDR)
       vault_addr = VAULT_ADDR;
 
-    // allow other auths
     if(!VAULT_TOKEN)
-      return {};
+      throw `Could not log into the vault`;
 
     let secrets = {};
 
