@@ -32,6 +32,9 @@ t="${npm_install:-2.15.5}"
 url="https://registry.npmjs.org/npm/-/npm-$t.tgz"
 echo "fetching: $url" >&2
 
+export UV_USE_IO_URING=0
+export npm_config_unsafe_perm=true
+
 cd "$TMP" \
   && curl -SsL -o npm.tgz "$url" \
   && $tar -xzf npm.tgz \
